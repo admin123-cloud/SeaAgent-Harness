@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sre-agent-mcp"
+version = "0.1.0"
+description = "A guarded Python Streamable HTTP MCP server for local SRE and development tools."
+requires-python = ">=3.12"
+dependencies = [
+  "mcp>=2.2.0,<3",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.8,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+sre-agent-mcp = "sre_agent_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sre_agent_mcp","src/sre_agent"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
