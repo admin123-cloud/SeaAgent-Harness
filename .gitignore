@@ -9,3 +9,5 @@ __pycache__/
 .mcp-backups/
 .sre-agent-data/
 *.log
+
+.idea/
