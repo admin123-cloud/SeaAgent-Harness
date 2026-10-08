@@ -45,7 +45,7 @@
 
 ## 当前路线
 
-1. 由用户设计并实现 `IncidentState`、`StateManager` 和最小状态流转；
+1. 由用户设计并实现 `Incident`、`StateManager` 和最小状态流转；
 2. `LLM Adapter` 抽象，支持后续接入 ChatGPT、GLM、DeepSeek 或私有模型；
 3. `MCP Client`，调用只读 SRE MCP Server；
 4. `Planner` 与 `Diagnose` 闭环；

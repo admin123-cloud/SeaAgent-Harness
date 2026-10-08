@@ -62,7 +62,7 @@ ChatGPT 只是备用入口，不是 SRE Agent 的核心依赖。
 ## 分阶段实施
 
 ```text
-Step 1  设计并实现 IncidentState + StateManager + Workflow 状态机  ← 当前
+Step 1  设计并实现 Incident + StateManager + Workflow 状态机  ← 当前
 Step 2  LLM Adapter，先支持结构化 Decision
 Step 3  MCP Client，连接当前 SRE MCP Server
 Step 4  Planner + Diagnose，只读 Pod 故障闭环
@@ -74,7 +74,7 @@ Step 6  Verify 和人工确认型 Act
 
 ## 开发协作规范
 
-本项目采用“用户主写、助手主导”的协作模式，详细约定见 [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)：
+本项目采用“用户主写、助手主导”的协作模式，详细约定见 [开发协作规范](docs/DEVELOPMENT_GUIDE.md)：
 
 - 用户负责 Python 代码实现、命令执行和逐步实验；
 - 助手负责架构拆解、概念解释、任务分步、接口设计、伪代码、Review 和错误定位；

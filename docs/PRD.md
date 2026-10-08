@@ -171,7 +171,7 @@ Agent 在配置的 `WORKSPACE_ROOT` 内列举、读取和搜索文本文件，�
 
 ### FR-004 Incident 状态模型
 
-系统必须定义统一的 `IncidentState`，至少包含：
+系统必须定义统一的 `Incident` 根模型，至少包含：
 
 ```text
 schema_version
@@ -186,7 +186,9 @@ created_at
 updated_at
 ```
 
-**验收标准**：模型可校验、可序列化、可恢复；字段有明确类型和默认规则；时间使用带时区 UTC；非法值在边界处被拒绝。
+Incident 工作状态必须通过仓储层保存到本地 SQLite，并能在进程重启后恢复。`environment` 与 `Evidence.data` 使用 JSON 文本存储；枚举使用字符串值，时间使用 UTC ISO 8601。
+
+**验收标准**：模型可校验、可序列化、可恢复；字段有明确类型和默认规则；时间使用带时区 UTC；非法值在边界处被拒绝；Incident 状态能通过 SQLite 仓储保存并重新加载。
 
 ### FR-005 状态与工作流
 
@@ -216,9 +218,9 @@ stateDiagram-v2
 
 ### FR-006 证据模型与审计
 
-每条证据必须记录 `evidence_id`、`source`、`kind`、`summary`、结构化 `data` 和 `created_at`，并能关联到 Incident 和工作流阶段。
+每条证据必须记录 `evidence_id`、`source`、`kind`、`summary`、结构化 `data` 和 `created_at`，并能关联到 Incident 和工作流阶段。同一 Incident 内的 `evidence_id` 不得重复；SQLite 必须通过 `(incident_id, evidence_id)` 复合主键或唯一约束原子地保证这一点。
 
-**验收标准**：证据追加不覆盖历史；大字段受大小限制；敏感信息在进入模型上下文前被过滤；诊断结论能引用证据 ID。
+**验收标准**：证据追加不覆盖历史；重复证据 ID 被拒绝；大字段受大小限制；敏感信息在进入模型上下文前被过滤；诊断结论能引用证据 ID。
 
 ### FR-007 LLM Adapter
 
@@ -291,7 +293,7 @@ stateDiagram-v2
 - 工作区边界：所有文件操作限制在 `WORKSPACE_ROOT`。
 - Kubernetes 边界：仅允许 `K8S_ALLOWED_NAMESPACES` 中的 namespace。
 - Jenkins 边界：只读 API；Job/Build 参数采用严格格式。
-- Agent 内部：`IncidentState` 持有状态和证据索引，`Evidence` 持有单次采集结果，Adapter 不直接修改状态。
+- Agent 内部：`Incident` 是根模型，包含当前状态、证据和状态变更历史；`StateManager` 执行状态规则但不直接操作 SQL；`IncidentRepository` 将 `Incident`、`Evidence`、`StatusTransition` 映射到 SQLite 的三张表并负责事务；Adapter 不直接修改状态。
 
 ## 10. 版本验收标准
 
@@ -299,7 +301,7 @@ V0.1 基础层完成需要同时满足：
 
 - MCP Server 能在合法配置下启动并提供已登记的只读工具。
 - 工作区、Kubernetes、Jenkins 的边界和错误行为有可重复验证记录。
-- `IncidentState`、`Evidence`、状态枚举和 `StateManager` 契约完整。
+- `Incident`、`Evidence`、`StatusTransition`、状态枚举和 `StateManager` 契约完整。
 - 至少完成一个不执行变更的诊断闭环，结论可引用证据。
 - 文档、配置示例和 README 与实际能力一致。
 - 所有未完成集成、外部环境依赖和安全风险已登记在任务台账。
@@ -314,16 +316,23 @@ V0.1 基础层完成需要同时满足：
 | 第四阶段 | OODA 外层循环与受限 ReAct 内层执行 | 待拆分任务 |
 | 第五阶段 | 反馈、评估、持续积累、定位和纠偏 | 待拆分任务 |
 
-## 12. 待决策问题
+## 12. 决策记录与待决策问题
 
-1. Incident 状态的持久化介质：本地 JSON、SQLite 还是外部存储？
-2. LLM Adapter 首个实现：OpenAI、OpenAI-compatible 私有模型，还是本地模型？
-3. MCP Client 的传输和连接生命周期如何管理？
-4. 诊断结论的置信度、证据引用和人工确认格式是否需要独立 schema？
-5. V0.1 的可观测性采用标准日志、OpenTelemetry，还是先保留结构化事件？
-6. Skill 的发布、权限、版本和回滚由 Agent 管理，还是由外部注册中心管理？
-7. 第二阶段哪些修复动作允许自动执行，哪些动作必须人工确认？
-8. 历史聊天和事件记忆的保留周期、脱敏策略和删除接口如何定义？
-9. OODA/ReAct 的最大循环次数、成功后置条件和人工升级阈值如何配置？
+### 已决策
+
+- Incident 工作状态使用本地 SQLite 持久化，默认文件为 `.sre-agent-data/sre-agent.sqlite3`；该目录已由 `.gitignore` 排除。SQLite 使用 Python 标准库 `sqlite3`，不增加第三方依赖。
+- 第一阶段使用 `incidents`、`evidence`、`status_transitions` 三张表保存 Incident 当前状态、证据和状态变更记录；第三阶段的知识库、会话记忆和历史事件检索仍需单独设计。
+- SQLite 访问集中在 `IncidentRepository`。`evidence` 表对 `(incident_id, evidence_id)` 设置复合主键，不能只靠先查询再插入来防重。schema 版本通过 SQLite `PRAGMA user_version` 管理。
+
+### 待决策问题
+
+1. LLM Adapter 首个实现：OpenAI、OpenAI-compatible 私有模型，还是本地模型？
+2. MCP Client 的传输和连接生命周期如何管理？
+3. 诊断结论的置信度、证据引用和人工确认格式是否需要独立 schema？
+4. V0.1 的可观测性采用标准日志、OpenTelemetry，还是先保留结构化事件？
+5. Skill 的发布、权限、版本和回滚由 Agent 管理，还是由外部注册中心管理？
+6. 第二阶段哪些修复动作允许自动执行，哪些动作必须人工确认？
+7. 历史聊天和事件记忆的保留周期、脱敏策略和删除接口如何定义？
+8. OODA/ReAct 的最大循环次数、成功后置条件和人工升级阈值如何配置？
 
 这些问题在进入对应实现任务前必须形成决策记录，不在代码中隐式决定。

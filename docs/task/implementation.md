@@ -9,9 +9,9 @@
 | 项目 | SRE Agent |
 | 规范方式 | SDD（Specification-Driven Development） |
 | 当前版本 | V0.1 基础层 |
-| 当前日期 | 2026-09-30 |
+| 当前日期 | 2026-10-08 |
 | 总体状态 | `IN_PROGRESS` |
-| 当前主线 | 阶段一：实现大模型调用（基础设计与状态模型准备中） |
+| 当前主线 | 阶段一：SDD-005 LLM Adapter 结构化决策 |
 
 ## 2. 状态与更新规则
 
@@ -42,9 +42,9 @@
 | --- | --- | --- | --- | --- |
 | SDD-001 | 建立 SDD 规范文档体系 | 无 | `DONE` | 根目录规范、PRD、任务台账已建立 |
 | SDD-002 | MCP Server 受控工具层 | 无 | `VERIFYING` | 工作区、Kubernetes、Jenkins 只读工具已存在，待系统化验收 |
-| SDD-003 | Incident 状态与证据模型 | SDD-001 | `IN_PROGRESS` | `IncidentState`、`Evidence`、状态枚举和序列化契约完整 |
-| SDD-004 | StateManager 与最小状态流转 | SDD-003 | `TODO` | 可创建、推进、阻塞、失败和恢复 Incident |
-| SDD-005 | LLM Adapter 结构化决策 | SDD-004 | `TODO` | 模型无关、结构化输出、超时和错误可控 |
+| SDD-003 | Incident 状态与证据模型 | SDD-001 | `DONE` | 模型字段和输入校验已实现；UTC 行为已人工验证 |
+| SDD-004 | StateManager 与 SQLite Incident 仓储 | SDD-003 | `IN_PROGRESS` | 可持久化/恢复 Incident，执行状态流转并追加去重证据 |
+| SDD-005 | LLM Adapter 结构化决策 | SDD-004 | `IN_PROGRESS` | 模型无关、结构化输出、超时和错误可控 |
 | SDD-006 | MCP Client | SDD-002、SDD-005 | `TODO` | 能调用只读 MCP 工具并标准化错误 |
 | SDD-007 | Planner / Diagnose 只读闭环 | SDD-004、SDD-006 | `TODO` | 创建 Incident → 收集状态/事件/日志 → 形成假设与建议 |
 | SDD-008 | Knowledge、Memory、Context 分层 | SDD-007 | `TODO` | 证据、历史事件和上下文有明确边界 |
@@ -80,16 +80,52 @@
 
 ### SDD-003 Incident 状态与证据模型
 
-- 状态：`IN_PROGRESS`
-- 已有实现：`Evidence` 已使用 Pydantic 描述证据字段；`IncidentStatus` 和 `WorkflowStage` 已定义；`IncidentState` 当前仍是未完成的字段草稿。
+- 状态：`DONE`
+- 已有实现：`Incident` 已成为 Pydantic 根模型，具备默认状态、空环境/证据、非负迭代次数、非空 `incident_id/goal` 校验、带时区时间校验并转换为 UTC。`Evidence` 已增加可选 `stage` 字段、非空 ID 和 JSON 数据校验；`StatusTransition` 管理状态变化记录。
 - 实现要求：
-  - `IncidentState` 使用可校验、可序列化的数据模型；
+  - `Incident` 使用可校验、可序列化的数据模型；
   - 明确 `schema_version`、事件标识、目标、环境、状态、阶段、证据、迭代次数和时间字段；
-  - 定义状态/阶段允许组合，拒绝非法流转；
-  - 时间统一使用带时区的 UTC；
-  - 证据追加保持可追踪，不覆盖已有证据。
+  - `incident_id`、`goal` 去除首尾空格后不能为空；
+  - `created_at`、`updated_at` 必须带时区并规范为 UTC；
+  - `Evidence` 关联产生阶段；
+  - Evidence 时间也必须带时区并规范为 UTC。
 - 验收标准：见 [PRD FR-004、FR-005、FR-006](../PRD.md#功能需求)。
-- 下一步：先补充模型契约和状态流转表，再实现最小验证。
+- 阶段性验收：用户已手动验证无时区时间被拒绝、上海时区时间转换为 UTC；基础构造和 JSON 往返此前通过。
+- 后续验证：自动化回归和完整嵌套 Evidence 序列化检查在阶段验收时补齐，不阻塞 SDD-004 开发。
+- 后续职责：证据追加/历史保留由 SDD-004 StateManager 实现；数据大小限制、敏感信息过滤和结论引用证据由后续诊断/上下文层实现。
+
+### SDD-004 StateManager、SQLite Repository 与最小状态流转
+
+- 状态：`IN_PROGRESS`
+- 持久化决策：采用 Python 标准库 `sqlite3`；默认数据库文件位于项目根目录 `.sre-agent-data/sre-agent.sqlite3`，可由 `SRE_AGENT_DB_PATH` 覆盖，无需增加第三方依赖。
+- 职责：`StateManager` 统一管理状态转移、阶段更新、时间戳刷新和证据追加；`IncidentRepository` 集中处理 SQL、读写和事务；模型负责字段与数据不变量校验。
+- 模型映射：`incidents` 表对应 Pydantic 根模型 `Incident`；`evidence` 对应 `Evidence`；`status_transitions` 对应 `StatusTransition`。`Incident` 聚合两张子表的记录；项目使用标准库 `sqlite3`，由仓储负责拆分和组装。
+- 最小表结构：`incidents` 以 `incident_id` 为主键保存当前字段；`evidence` 外键关联 Incident，并通过 `(incident_id, evidence_id)` 复合主键防重；`status_transitions` 保存 `from_status`、`to_status`、原因和变更时间。SQLite 连接启用外键。时间以带时区 UTC ISO 8601 字符串存储，`environment` 和 `Evidence.data` 以 JSON 文本存储。
+- 已写入类：`models/incident.py` 定义根模型；`models/status_transition.py` 定义状态变化模型；`storage/sqlite_database.py` 管理连接、外键、schema 初始化和 `PRAGMA user_version`；`storage/incident_repository.py` 提供 Incident 创建/加载、状态变更和证据追加；`StateManager` 通过仓储完成持久化后再更新内存对象。
+- 状态流转：按 PRD FR-005 的图实现合法边；拒绝非法转移；BLOCKED 恢复回 PLANNING；失败和阻塞原因可追踪。
+- 原因归属：阻塞/失败原因属于状态变更记录，不直接塞进 `Incident` 的未声明字段；可通过仓储查询状态变更历史。
+- 状态变更事务：在一个事务中写入 `status_transitions` 并更新 `incidents`；只有提交成功后才更新内存中的 `Incident`。
+- 证据追加事务：在一个事务中插入 Evidence 并刷新 Incident 的 `updated_at`；唯一约束冲突转换成清晰的重复证据错误。可先 `SELECT` 改善错误提示，但它不能替代唯一约束。
+- 仓储接口至少覆盖：建表/初始化、创建 Incident、按 ID 加载、保存状态变更、追加 Evidence。`StateManager` 不直接拼 SQL。
+- 验收：覆盖正常路径、非法路径、阻塞/恢复、失败终态、Incident 重启恢复、重复证据拒绝和证据不覆盖历史；自动化验证按用户要求放到阶段性检查。
+- 当前步骤：本地调试入口已初始化 schema、创建或加载 `incident-001`，并以 `StateManager(state, repository)` 接入生命周期；入口已成功运行。`StateManager` 和 `StatusTransition` 已要求进入 `BLOCKED` 或 `FAILED` 时提供非空原因。状态流转、重启恢复和证据去重的验证仍留到阶段性验收。
+
+### SDD-005 LLM Adapter 结构化决策
+
+- 状态：`IN_PROGRESS`
+- 目标：定义模型供应商无关的结构化请求/响应，并通过 Adapter 隔离具体 HTTP/SDK 调用。
+- 子任务与命名：
+
+| 子任务 | 文件 | 类型/接口名 | 目标 |
+| --- | --- | --- | --- |
+| SDD-005-A 决策契约模型 | `models/decision.py` | `DecisionTask`、`DecisionRequest`、`DecisionResponse` | 统一规划/诊断请求和结构化响应 |
+| SDD-005-B Adapter 接口 | `agent/llm_adapter.py` | `LLMAdapter` | 定义异步 `decide(request)` 边界 |
+| SDD-005-C 调用配置与错误 | `config/llm_settings.py`、`agent/llm_errors.py` | `LLMSettings`、`LLMError` 及具体子类 | 管理模型名、服务地址、密钥引用、超时/重试，并归一化错误 |
+| SDD-005-D OpenAI-compatible 实现 | `agent/openai_compatible_adapter.py` | `OpenAICompatibleLLMAdapter` | 调用兼容接口并把响应校验为 `DecisionResponse` |
+| SDD-005-E 调用可观测性 | `agent/llm_adapter.py` 及日志配置 | `LLMCallSummary` | 记录耗时、结果类型和错误类型，不记录密钥或完整上下文 |
+
+- 当前步骤：SDD-005-A 的 `DecisionTask`、`DecisionRequest`、`DecisionResponse` 和 SDD-005-B 的 `LLMAdapter` 接口已建立。请求由调用方提供已脱敏的 Incident 上下文；响应只表达计划、诊断结论、证据引用和建议，不携带可直接执行的工具调用。下一步开始 SDD-005-C：调用配置与错误类型。
+- 后续：依次完成配置/错误模型、一个 OpenAI-compatible 提供方、超时与有界重试、调用摘要日志；阶段性验收再验证真实模型调用、输出 schema 和错误处理。
 
 ## 6. 五阶段执行计划
 
@@ -97,7 +133,7 @@
 
 - 状态：`IN_PROGRESS`
 - 任务：SDD-003、SDD-004、SDD-005。
-- [ ] 完成 `IncidentState`、`Evidence` 和状态流转契约。
+- [ ] 完成 `Incident`、`Evidence`、SQLite 仓储和状态流转契约。
 - [ ] 定义 `LLMAdapter`，隔离供应商、模型配置和传输细节。
 - [ ] 定义结构化 Prompt 输入、决策输出和 schema 校验。
 - [ ] 增加超时、有限重试、错误归一化、敏感信息脱敏和调用记录。
@@ -155,8 +191,8 @@
 
 ## 7. 近期执行顺序
 
-1. 完成 SDD-003 的 `IncidentState` 字段、校验和序列化契约。
-2. 设计并实现 SDD-004 的 `StateManager`，覆盖正常、阻塞、失败和恢复路径。
+1. 完成 SDD-003 的 `Incident` 字段、校验和序列化契约。
+2. 设计并实现 SDD-004 的 SQLite `IncidentRepository` 与 `StateManager`，覆盖保存/恢复、正常流转、阻塞、失败和证据去重。
 3. 设计并实现 SDD-005 的 `LLMAdapter` 和结构化决策协议。
 4. 对 SDD-002 现有工具做一次边界验收，为阶段二接入做准备。
 5. 阶段一验收通过后，再进入 MCP Client、Skill 和工具编排。
@@ -168,6 +204,12 @@
 | 2026-09-29 | SDD-001 | 建立规范、PRD 和任务台账 | 文档初版；代码未改动 |
 | 2026-09-29 | 路线规划 | 将产品路线明确为大模型调用、工具扩展、知识记忆、OODA/ReAct、持续纠偏五阶段 | 已同步 PRD、CLAUDE 和本台账 |
 | 2026-09-30 | 阶段一启动 | 开始指导 Incident 状态模型，为大模型调用准备稳定上下文契约 | 当前执行 SDD-003，代码待用户实现和 Review |
+| 2026-10-08 | SDD-003 进展 | Incident/Evidence 字段校验、Evidence.stage 和 UTC 转换已实现；用户手动验证了时区行为 | 自动化回归和嵌套 Evidence 往返在阶段验收补齐 |
+| 2026-10-08 | SDD-004 启动 | 按用户节奏开始 StateManager；先定义契约和流转，再实施阶段性验证 | 当前任务：状态流转表、原因记录和证据追加接口 |
+| 2026-10-08 | SDD-004 SQLite 实现 | 增加三张表、状态变化 Pydantic 模型、SQLite 数据库类、IncidentRepository，并让 StateManager 通过仓储提交变化 | 未运行测试；应用启动接线和阶段性验收待做 |
+| 2026-10-08 | SDD-004 启动接线 | `main.py` 可创建或加载 Incident 并构造 StateManager；入口运行成功；已增加 BLOCKED/FAILED 原因校验 | 状态流转、恢复、持久化和证据去重在阶段性验收时验证 |
+| 2026-10-08 | SDD-005 启动 | 开始定义供应商无关的请求/响应模型和 Adapter 接口 | 先稳定结构化契约，再接具体模型调用 |
+| 2026-10-08 | SDD-005 决策契约与接口 | 建立 DecisionTask、DecisionRequest、DecisionResponse 与 LLMAdapter 异步接口 | 下一步实现 LLMSettings 和统一错误类型；真实模型调用与阶段验收待后续 |
 
 ## 9. 阻塞与风险
 
