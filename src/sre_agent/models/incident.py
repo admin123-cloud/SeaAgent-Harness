@@ -11,7 +11,7 @@ from sre_agent.models.status_transition import StatusTransition
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
-
+# 事件
 class Incident(BaseModel):
     """Incident 根模型；仓储将其当前字段及关联记录保存到 SQLite。"""
 
