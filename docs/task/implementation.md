@@ -207,9 +207,10 @@
 | 2026-10-08 | SDD-003 进展 | Incident/Evidence 字段校验、Evidence.stage 和 UTC 转换已实现；用户手动验证了时区行为 | 自动化回归和嵌套 Evidence 往返在阶段验收补齐 |
 | 2026-10-08 | SDD-004 启动 | 按用户节奏开始 StateManager；先定义契约和流转，再实施阶段性验证 | 当前任务：状态流转表、原因记录和证据追加接口 |
 | 2026-10-08 | SDD-004 SQLite 实现 | 增加三张表、状态变化 Pydantic 模型、SQLite 数据库类、IncidentRepository，并让 StateManager 通过仓储提交变化 | 未运行测试；应用启动接线和阶段性验收待做 |
-| 2026-10-08 | SDD-004 启动接线 | `main.py` 可创建或加载 Incident 并构造 StateManager；入口运行成功；已增加 BLOCKED/FAILED 原因校验 | 状态流转、恢复、持久化和证据去重在阶段性验收时验证 |
+| 2026-10-08 | SDD-004 启动接线 | 原 `main.py` 可创建或加载 Incident 并构造 StateManager；入口运行成功；已增加 BLOCKED/FAILED 原因校验 | 状态流转、恢复、持久化和证据去重在阶段性验收时验证；当前已由 Web 工作台承接开发调试 |
 | 2026-10-08 | SDD-005 启动 | 开始定义供应商无关的请求/响应模型和 Adapter 接口 | 先稳定结构化契约，再接具体模型调用 |
 | 2026-10-08 | SDD-005 决策契约与接口 | 建立 DecisionTask、DecisionRequest、DecisionResponse 与 LLMAdapter 异步接口 | 下一步实现 LLMSettings 和统一错误类型；真实模型调用与阶段验收待后续 |
+| 2026-10-10 | 本地事件工作台 | 增加 conversation_entries SQLite 迁移、事件 CRUD、消息处理 API 和本地 Web 工作台；过程记录与事件一起持久化 | 已完成编译和 API 冒烟；真实模型调用依赖本地 LLM_* 配置，MCP 采集闭环仍待 SDD-006/007 |
 
 ## 9. 阻塞与风险
 

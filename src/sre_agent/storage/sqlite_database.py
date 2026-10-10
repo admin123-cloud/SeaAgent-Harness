@@ -1,11 +1,10 @@
 import os
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
-
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_V1 = (
     """
@@ -54,6 +53,26 @@ _SCHEMA_V1 = (
     "CREATE INDEX IF NOT EXISTS idx_status_transitions_incident ON status_transitions (incident_id, transition_id)",
 )
 
+_SCHEMA_V2 = (
+    """
+    CREATE TABLE IF NOT EXISTS conversation_entries (
+        entry_id TEXT PRIMARY KEY,
+        incident_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'agent')),
+        kind TEXT NOT NULL CHECK (
+            kind IN ('message', 'process', 'llm_request', 'llm_response', 'error')
+        ),
+        content TEXT NOT NULL,
+        data_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (incident_id)
+            REFERENCES incidents (incident_id)
+            ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_conversation_incident_created ON conversation_entries (incident_id, created_at)",
+)
+
 
 class SQLiteDatabase:
     """SQLite 连接和 schema 生命周期。每个操作独立开关连接并启用外键。"""
@@ -95,5 +114,10 @@ class SQLiteDatabase:
 
             if current_version == 0:
                 for statement in _SCHEMA_V1:
+                    connection.execute(statement)
+                current_version = 1
+
+            if current_version == 1:
+                for statement in _SCHEMA_V2:
                     connection.execute(statement)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

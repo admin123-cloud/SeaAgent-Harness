@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sre_agent.enums.incident_status import IncidentStatus
 from sre_agent.enums.workflow_stage import WorkflowStage
+from sre_agent.models.conversation_entry import ConversationEntry
 from sre_agent.models.evidence import Evidence
 from sre_agent.models.incident import Incident
 from sre_agent.models.status_transition import StatusTransition
@@ -103,6 +104,76 @@ class IncidentRepository:
             created_at=incident_row["created_at"],
             updated_at=incident_row["updated_at"],
         )
+
+    def list_incidents(self) -> list[Incident]:
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                "SELECT * FROM incidents ORDER BY updated_at DESC, created_at DESC"
+            ).fetchall()
+        return [
+            Incident(
+                schema_version=row["schema_version"],
+                incident_id=row["incident_id"],
+                goal=row["goal"],
+                environment=json.loads(row["environment_json"]),
+                status=row["status"],
+                stage=row["stage"],
+                iteration=row["iteration"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        ]
+
+    def delete_incident(self, incident_id: str) -> bool:
+        with self.database.transaction(immediate=True) as connection:
+            cursor = connection.execute(
+                "DELETE FROM incidents WHERE incident_id = ?", (incident_id,)
+            )
+            return cursor.rowcount == 1
+
+    def add_conversation_entry(self, incident_id: str, entry: ConversationEntry) -> None:
+        with self.database.transaction(immediate=True) as connection:
+            cursor = connection.execute(
+                "UPDATE incidents SET updated_at = ? WHERE incident_id = ?",
+                (entry.created_at.isoformat(), incident_id),
+            )
+            if cursor.rowcount != 1:
+                raise IncidentNotFoundError(f"Incident 不存在: {incident_id}")
+            connection.execute(
+                """
+                INSERT INTO conversation_entries (
+                    entry_id, incident_id, role, kind, content, data_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry.entry_id,
+                    incident_id,
+                    entry.role,
+                    entry.kind,
+                    entry.content,
+                    self._json_dumps(entry.data),
+                    entry.created_at.isoformat(),
+                ),
+            )
+
+    def get_conversation_entries(self, incident_id: str) -> list[ConversationEntry]:
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                "SELECT * FROM conversation_entries WHERE incident_id = ? ORDER BY rowid",
+                (incident_id,),
+            ).fetchall()
+        return [
+            ConversationEntry(
+                entry_id=row["entry_id"],
+                role=row["role"],
+                kind=row["kind"],
+                content=row["content"],
+                data=json.loads(row["data_json"]),
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
 
     def save_transition(
         self,

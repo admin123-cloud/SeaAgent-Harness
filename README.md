@@ -33,6 +33,20 @@ python -m pip install -e ".[dev]"
 python -m sre_agent_mcp.server
 ```
 
+## 本地 SRE 事件工作台
+
+开发和调试不再需要直接运行 `main.py`。使用本地 Web 工作台按事件管理对话，并查看 Agent 的结构化处理过程：
+
+```powershell
+python -m sre_agent.web_app
+# 或安装项目后执行
+sre-agent-web
+```
+
+打开 <http://127.0.0.1:8765>。事件、聊天消息、状态变化、模型请求/响应和错误记录在 `.sre-agent-data/sre-agent.sqlite3`，重启页面或进程后仍可恢复。可以通过 `SRE_AGENT_WEB_HOST`、`SRE_AGENT_WEB_PORT` 和 `SRE_AGENT_DB_PATH` 调整监听地址、端口和数据库位置。
+
+当前工作台只展示模型已返回的结构化结果和可审计的过程记录，不把未接入的 Kubernetes/MCP 采集步骤伪装成已执行。
+
 MCP 地址：
 
 ```text

@@ -23,9 +23,10 @@ dev = [
 
 [project.scripts]
 sre-agent-mcp = "sre_agent_mcp.server:main"
+sre-agent-web = "sre_agent.web_app:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sre_agent_mcp","src/sre_agent"]
+packages = ["src/sre_agent"]
 
 [tool.ruff]
 line-length = 120

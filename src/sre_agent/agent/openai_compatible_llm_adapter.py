@@ -8,7 +8,6 @@ from openai import (
     PermissionDeniedError,
     RateLimitError,
 )
-
 from sre_agent.agent.llm_errors import (
     LLMAuthenticationError,
     LLMProviderError,
@@ -16,11 +15,13 @@ from sre_agent.agent.llm_errors import (
     LLMTimeoutError,
     LLMOutputError,
 )
-from pydantic import ValidationError
+from pydantic import TypeAdapter,ValidationError
 from sre_agent.config.llm_settings import LLMSettings
+from sre_agent.models import AgentDecision
 from sre_agent.request.decision_request import DecisionRequest
-from sre_agent.response.decision_response import DecisionResponse
 
+# 创建解析器
+_AGENT_DECISION_ADAPTER = TypeAdapter(AgentDecision)
 
 class OpenAICompatibleLLMAdapter:
     """ openai类型大模型适配器 """
@@ -34,7 +35,7 @@ class OpenAICompatibleLLMAdapter:
         )
 
 
-    async def decide(self,request: DecisionRequest) -> DecisionResponse:
+    async def decide(self,request: DecisionRequest) -> AgentDecision:
         request_data = request.model_dump(mode="json")
         try:
             # 请求模型 自动添加提示词
@@ -43,11 +44,30 @@ class OpenAICompatibleLLMAdapter:
                 messages = [
                 #系统提示词
                     {
-                        "role":"system",
-                        "content":(
-                            "你是 SRE 辅助决策模型。"
-                            "只返回一个 JSON 对象，不要添加 Markdown 或其他说明。"
-                            "对象字段为 summary、findings、evidence_ids、confidence、recommendations。"
+                        "role": "system",
+                        "content": (
+                            "你是 SRE 辅助决策模型。\n"
+                            "只返回一个合法 JSON 对象，不要返回 Markdown、代码块或其他说明。\n"
+                            "根对象只能使用以下两种格式之一。\n\n"
+
+                            "格式一：需要调用工具时：\n"
+                            '{"kind":"tool_call","tool_calls":['
+                            '{"call_id":"call-001",'
+                            '"tool_name":"demo_echo",'
+                            '"arguments":{"message":"hello"}}'
+                            "]}\n\n"
+
+                            "格式二：可以直接给出结论时：\n"
+                            '{"kind":"final","response":{'
+                            '"summary":"诊断结论",'
+                            '"findings":[],'
+                            '"evidence_ids":[],'
+                            '"confidence":0.9,'
+                            '"recommendations":[]'
+                            "}}\n\n"
+
+                            "需要外部信息时返回 kind=tool_call；"
+                            "信息足够时返回 kind=final。"
                         ),
                     },
                     {
@@ -66,9 +86,7 @@ class OpenAICompatibleLLMAdapter:
         except APIConnectionError as exc:
             raise LLMProviderError("无法连接 CETC 网关") from exc
         except APIStatusError as exc:
-            raise LLMProviderError(
-                f"CETC 网关返回 HTTP {exc.status_code}"
-            ) from exc
+            raise LLMProviderError(f"CETC 网关返回 HTTP {exc.status_code}") from exc
         if not completion.choices:
             raise LLMOutputError("模型响应没有 choices")
         content = completion.choices[0].message.content
@@ -76,9 +94,9 @@ class OpenAICompatibleLLMAdapter:
             raise LLMOutputError("模型响应内容为空")
 
         try:
-            return DecisionResponse.model_validate_json(content)
+            return _AGENT_DECISION_ADAPTER.validate_json(content)
         except ValidationError  as exc:
-            raise LLMOutputError("模型响应不符合 DecisionResponse 格式") from exc
+            raise LLMOutputError("模型响应不符合 AgentDecision  格式") from exc
 
 
     async def aclose(self) -> None:
