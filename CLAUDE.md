@@ -43,8 +43,17 @@
 ## 4. 仓库结构约定
 
 ```text
-src/sre_agent/                 Agent Runtime、状态模型、工作流
-src/sre_agent_mcp/             MCP Server、工作区/K8s/Jenkins 工具
+src/agent/                     Agent Runtime、模型适配与状态管理
+src/config/                    应用配置
+src/database/                  SQLite 数据库与事件仓储
+src/model/                     请求、响应、状态与领域模型
+src/tools/                     受控工具实现
+src/scripts/                   项目内验证脚本
+src/skills/humanizer/          Humanizer Skill 源码
+src/web_app.py                 本地事件工作台入口
+src/main.py                    命令行演示入口
+.graphify/                     项目架构关系图、报告和 Graphify 缓存
+scripts/graphify_project.py    使用根目录 .graphify 的 Graphify 包装入口
 docs/PRD.md                   产品需求规格
 docs/task/implementation.md  任务拆解和状态跟踪
 README.md                      运行说明和对外能力概览
@@ -52,6 +61,8 @@ docs/DEVELOPMENT_GUIDE.md      学习型协作与 Review 约定
 ```
 
 生成目录（如 `.venv`、`node_modules`、`dist`、`__pycache__`）不作为规范或源码修改目标，除非任务明确要求处理构建产物。
+
+项目架构图谱位于仓库根目录 `.graphify/`，这是有意跟踪的项目级产物，不应放到 `src/`。通过 `python scripts/graphify_project.py ...` 执行查询和更新；更新目标为 `src`。
 
 ## 5. 协作规则
 

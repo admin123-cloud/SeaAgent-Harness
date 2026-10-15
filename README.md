@@ -1,8 +1,8 @@
 # SRE Agent MCP
 
-这是 SRE Agent 的 Python V0.1 基础层。它目前是一个模型无关的 Streamable HTTP MCP Server，先提供受控的本地工作区工具；后续可接入 Kubernetes、Jenkins、Prometheus、Loki，并由 ChatGPT、Codex 或私有化模型作为不同的推理入口。
+这是 SRE Agent 的 Python V0.1 基础层。当前代码包含 Agent Runtime、模型适配、状态管理和本地事件工作台；MCP Server/Client 的协议入口仍按 PRD 后续阶段推进。
 
-当前 SRE MCP 工具层已具备基础能力；Agent Runtime 尚未实现。接下来从状态模型开始，由用户亲自编写，按小步完成后再逐层接入模型和 MCP Client。
+当前源码没有 `sre_agent_mcp.server` 模块。快速启动命令运行本地事件工作台；不要将它当作 MCP Server 使用。
 
 ## V0.1 能力
 
@@ -30,7 +30,8 @@ Copy-Item .env.example .env
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-python -m sre_agent_mcp.server
+# 启动本地事件工作台
+sre-agent-web
 ```
 
 ## 本地 SRE 事件工作台
@@ -38,7 +39,7 @@ python -m sre_agent_mcp.server
 开发和调试不再需要直接运行 `main.py`。使用本地 Web 工作台按事件管理对话，并查看 Agent 的结构化处理过程：
 
 ```powershell
-python -m sre_agent.web_app
+python -m web_app
 # 或安装项目后执行
 sre-agent-web
 ```
@@ -47,13 +48,24 @@ sre-agent-web
 
 当前工作台只展示模型已返回的结构化结果和可审计的过程记录，不把未接入的 Kubernetes/MCP 采集步骤伪装成已执行。
 
-MCP 地址：
+当前源码中尚无可启动的 MCP Server 模块，以下 PRD 规划地址暂不可用：
 
 ```text
 http://127.0.0.1:8787/mcp
 ```
 
 Kubernetes 和 Jenkins 工具需要在 `.env` 中配置对应的访问范围和凭据。Jenkins 建议使用只读 API Token；不要把密码、Token 或 kubeconfig 内容作为工具返回值交给模型。
+
+## 项目架构图谱
+
+Graphify 生成的项目架构关系、报告和缓存统一保存在仓库根目录 `.graphify/`。使用仓库包装脚本执行查询或更新，避免输出回到 `src/graphify-out`：
+
+```powershell
+python scripts/graphify_project.py query "How does SREWebApp route decisions?"
+python scripts/graphify_project.py update
+```
+
+更新命令只重建 `src` 的代码关系图，不执行语义提取。包装脚本也会把扫描根目录记录为相对路径，保证图谱可在不同开发机上继续更新。
 
 ## 后续架构
 
