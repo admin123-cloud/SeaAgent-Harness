@@ -1,0 +1,464 @@
+{
+  "communities": {
+    "0": [
+      "agent_llm_adapter",
+      "agent_openai_compatible_llm_adapter",
+      "agent_runtime",
+      "agent_tool_registry",
+      "asyncio",
+      "collections_abc",
+      "config_llm_settings",
+      "contextlib",
+      "dataclasses",
+      "http",
+      "http_server",
+      "json",
+      "main",
+      "main_demo_tool",
+      "openai",
+      "os",
+      "pathlib",
+      "pydantic",
+      "pydantic_settings",
+      "request_decision_request",
+      "sqlite3",
+      "sre_agent_agent_llm_adapter",
+      "sre_agent_agent_llm_errors",
+      "sre_agent_agent_openai_compatible_llm_adapter",
+      "sre_agent_agent_state_manager",
+      "sre_agent_config_llm_settings",
+      "sre_agent_enums_decision_task",
+      "sre_agent_models",
+      "sre_agent_models_decision",
+      "sre_agent_request_decision_request",
+      "sre_agent_storage",
+      "sre_agent_tools_default_tools",
+      "storage_sqlite_database",
+      "threading",
+      "time",
+      "typing",
+      "urllib_parse",
+      "web_app",
+      "web_app_main",
+      "web_app_rationale_1"
+    ],
+    "1": [
+      "enums_workflow_stage",
+      "enums_workflow_stage_py_enum",
+      "enums_workflow_stage_workflowstage",
+      "lookuperror",
+      "path",
+      "row",
+      "storage_incident_repository_incidentnotfounderror",
+      "storage_incident_repository_incidentrepository",
+      "storage_incident_repository_incidentrepository_add_conversation_entry",
+      "storage_incident_repository_incidentrepository_add_evidence",
+      "storage_incident_repository_incidentrepository_create_incident",
+      "storage_incident_repository_incidentrepository_delete_incident",
+      "storage_incident_repository_incidentrepository_evidence_from_row",
+      "storage_incident_repository_incidentrepository_get_incident",
+      "storage_incident_repository_incidentrepository_init",
+      "storage_incident_repository_incidentrepository_initialize",
+      "storage_incident_repository_incidentrepository_insert_evidence",
+      "storage_incident_repository_incidentrepository_insert_transition",
+      "storage_incident_repository_incidentrepository_json_dumps",
+      "storage_incident_repository_incidentrepository_save_transition",
+      "storage_incident_repository_incidentrepository_transition_from_row",
+      "storage_incident_repository_py_connection",
+      "storage_incident_repository_rationale_31",
+      "storage_sqlite_database_py_connection",
+      "storage_sqlite_database_rationale_107",
+      "storage_sqlite_database_rationale_78",
+      "storage_sqlite_database_sqlitedatabase",
+      "storage_sqlite_database_sqlitedatabase_init",
+      "storage_sqlite_database_sqlitedatabase_initialize",
+      "storage_sqlite_database_sqlitedatabase_transaction",
+      "web_app_srewebapp_init"
+    ],
+    "2": [
+      "agent_llm_adapter_llmadapter",
+      "agent_llm_adapter_llmadapter_decide",
+      "agent_llm_adapter_py_agentdecision",
+      "agent_runtime_agentruntime",
+      "agent_runtime_agentruntime_init",
+      "agent_runtime_agentruntime_run",
+      "enum",
+      "enums_decision_task",
+      "enums_decision_task_decisiontask",
+      "models_decision",
+      "models_decision_finaldecision",
+      "models_decision_py_basemodel",
+      "models_decision_toolcalldecision",
+      "protocol",
+      "request_decision_request_decisionrequest",
+      "request_decision_request_py_basemodel",
+      "response_decision_response",
+      "response_decision_response_decisionresponse",
+      "response_decision_response_decisionresponse_summary_must_not_be_blank",
+      "response_decision_response_py_basemodel",
+      "response_decision_response_py_field_validator",
+      "sre_agent_models_tool_call",
+      "sre_agent_response_decision_response",
+      "strenum",
+      "web_app_srewebapp",
+      "web_app_srewebapp_add_message",
+      "web_app_srewebapp_delete_incident",
+      "web_app_srewebapp_get_incident",
+      "web_app_srewebapp_list_incidents",
+      "web_app_srewebapp_public_incident"
+    ],
+    "3": [
+      "agent_state_manager_rationale_58",
+      "agent_state_manager_rationale_84",
+      "agent_state_manager_statemanager",
+      "agent_state_manager_statemanager_add_evidence",
+      "agent_state_manager_statemanager_init",
+      "agent_state_manager_statemanager_transition_to",
+      "enums_incident_status",
+      "enums_incident_status_incidentstatus",
+      "enums_incident_status_py_enum",
+      "enums_incident_status_rationale_5",
+      "models_incident_incident",
+      "models_incident_incident_require_aware_utc",
+      "models_incident_incident_status_history_matches_current_state",
+      "models_incident_incident_strip_and_require_non_empty",
+      "models_incident_py_basemodel",
+      "models_incident_py_field_validator",
+      "models_incident_py_model_validator",
+      "models_incident_rationale_16",
+      "storage_incident_repository_duplicateevidenceerror",
+      "storage_incident_repository_incidentalreadyexistserror",
+      "storage_incident_repository_incidentrepository_list_incidents",
+      "storage_incident_repository_rationale_15",
+      "storage_incident_repository_rationale_27",
+      "valueerror"
+    ],
+    "4": [
+      "agent_state_manager",
+      "datetime",
+      "models_incident",
+      "models_incident_py_datetime",
+      "models_incident_utc_now",
+      "models_init",
+      "runtimeerror",
+      "sre_agent_enums_incident_status",
+      "sre_agent_enums_workflow_stage",
+      "sre_agent_models_conversation_entry",
+      "sre_agent_models_evidence",
+      "sre_agent_models_incident",
+      "sre_agent_models_status_transition",
+      "sre_agent_storage_incident_repository",
+      "sre_agent_storage_sqlite_database",
+      "storage_incident_repository",
+      "storage_incident_repository_incidentstatusconflicterror",
+      "storage_incident_repository_py_datetime",
+      "storage_incident_repository_rationale_23",
+      "storage_init"
+    ],
+    "5": [
+      "agent_llm_errors_toolnotfounderror",
+      "agent_tool_registry_rationale_42",
+      "agent_tool_registry_toolregistry",
+      "agent_tool_registry_toolregistry_execute",
+      "agent_tool_registry_toolregistry_failure_result",
+      "agent_tool_registry_toolregistry_get",
+      "agent_tool_registry_toolregistry_init",
+      "agent_tool_registry_toolregistry_list_specs",
+      "agent_tool_registry_toolregistry_register",
+      "agent_tool_registry_toolspec",
+      "exception",
+      "models_tool_call",
+      "models_tool_call_py_basemodel",
+      "models_tool_call_py_field_validator",
+      "models_tool_call_toolcall",
+      "models_tool_call_toolcall_require_non_blank",
+      "models_tool_call_toolresult",
+      "models_tool_call_toolresult_require_non_blank"
+    ],
+    "6": [
+      "agent_llm_errors",
+      "agent_llm_errors_llmauthenticationerror",
+      "agent_llm_errors_llmerror",
+      "agent_llm_errors_llmoutputerror",
+      "agent_llm_errors_llmprovidererror",
+      "agent_llm_errors_llmratelimiterror",
+      "agent_llm_errors_llmtimeouterror",
+      "agent_llm_errors_rationale_23",
+      "agent_openai_compatible_llm_adapter_openaicompatiblellmadapter",
+      "agent_openai_compatible_llm_adapter_openaicompatiblellmadapter_aclose",
+      "agent_openai_compatible_llm_adapter_openaicompatiblellmadapter_decide",
+      "agent_openai_compatible_llm_adapter_openaicompatiblellmadapter_init",
+      "agent_openai_compatible_llm_adapter_py_agentdecision",
+      "basesettings",
+      "config_llm_settings_llmsettings"
+    ],
+    "7": [
+      "models_conversation_entry",
+      "models_conversation_entry_conversationentry",
+      "models_conversation_entry_conversationentry_require_aware_utc",
+      "models_conversation_entry_conversationentry_require_json_data",
+      "models_conversation_entry_conversationentry_require_non_blank_content",
+      "models_conversation_entry_py_basemodel",
+      "models_conversation_entry_py_datetime",
+      "models_conversation_entry_py_field_validator",
+      "models_conversation_entry_rationale_14",
+      "models_conversation_entry_utc_now",
+      "storage_incident_repository_incidentrepository_get_conversation_entries",
+      "uuid",
+      "web_app_srewebapp_create_incident"
+    ],
+    "8": [
+      "models_evidence",
+      "models_evidence_evidence",
+      "models_evidence_evidence_require_aware_utc",
+      "models_evidence_evidence_require_json_data",
+      "models_evidence_evidence_require_non_empty_id",
+      "models_evidence_py_basemodel",
+      "models_evidence_py_datetime",
+      "models_evidence_py_field_validator",
+      "models_evidence_rationale_12",
+      "models_evidence_utc_now"
+    ],
+    "9": [
+      "models_status_transition",
+      "models_status_transition_py_basemodel",
+      "models_status_transition_py_datetime",
+      "models_status_transition_py_field_validator",
+      "models_status_transition_py_model_validator",
+      "models_status_transition_statustransition",
+      "models_status_transition_statustransition_require_aware_utc",
+      "models_status_transition_statustransition_require_reason_for_blocked_or_failed",
+      "models_status_transition_statustransition_strip_reason",
+      "models_status_transition_utc_now"
+    ],
+    "10": [
+      "basehttprequesthandler",
+      "web_app_requesthandler",
+      "web_app_requesthandler_do_delete",
+      "web_app_requesthandler_do_get",
+      "web_app_requesthandler_do_post",
+      "web_app_requesthandler_json_body",
+      "web_app_requesthandler_log_message",
+      "web_app_requesthandler_send"
+    ],
+    "11": [
+      "sre_agent_agent_tool_registry",
+      "sre_agent_tools_demo_echo",
+      "tools_default_tools",
+      "tools_default_tools_build_default_registry",
+      "tools_demo_echo",
+      "tools_demo_echo_demoechoinput",
+      "tools_demo_echo_py_basemodel",
+      "tools_demo_echo_run_demo_echo"
+    ],
+    "12": [
+      "models_kubernetes_observation",
+      "models_kubernetes_observation_kubernetesobservation",
+      "models_kubernetes_observation_kubernetesobservation_strip_and_require_non_empty",
+      "models_kubernetes_observation_py_datetime",
+      "models_kubernetes_observation_py_field_validator",
+      "models_kubernetes_observation_utc_now"
+    ],
+    "13": [
+      "agent_init"
+    ],
+    "14": [
+      "agent_state"
+    ],
+    "15": [
+      "config_init"
+    ],
+    "16": [
+      "enums_init"
+    ],
+    "17": [
+      "init"
+    ],
+    "18": [
+      "request_init"
+    ],
+    "19": [
+      "response_init"
+    ],
+    "20": [
+      "tools_init"
+    ],
+    "21": [
+      "tools_jenkins"
+    ],
+    "22": [
+      "tools_kubernetes"
+    ]
+  },
+  "cohesion": {
+    "0": 0.06666666666666667,
+    "1": 0.1032258064516129,
+    "2": 0.09655172413793103,
+    "3": 0.11231884057971014,
+    "4": 0.1631578947368421,
+    "5": 0.17647058823529413,
+    "6": 0.2761904761904762,
+    "7": 0.20512820512820512,
+    "8": 0.28888888888888886,
+    "9": 0.26666666666666666,
+    "10": 0.39285714285714285,
+    "11": 0.32142857142857145,
+    "12": 0.4,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0,
+    "21": 1.0,
+    "22": 1.0
+  },
+  "gods": [
+    {
+      "id": "storage_incident_repository_incidentrepository",
+      "label": "IncidentRepository",
+      "degree": 27
+    },
+    {
+      "id": "web_app_srewebapp",
+      "label": "SREWebApp",
+      "degree": 20
+    },
+    {
+      "id": "models_incident_incident",
+      "label": "Incident",
+      "degree": 20
+    },
+    {
+      "id": "models_evidence_evidence",
+      "label": "Evidence",
+      "degree": 14
+    },
+    {
+      "id": "agent_openai_compatible_llm_adapter_openaicompatiblellmadapter",
+      "label": "OpenAICompatibleLLMAdapter",
+      "degree": 13
+    },
+    {
+      "id": "models_status_transition_statustransition",
+      "label": "StatusTransition",
+      "degree": 13
+    },
+    {
+      "id": "agent_state_manager_statemanager",
+      "label": "StateManager",
+      "degree": 12
+    },
+    {
+      "id": "agent_tool_registry_toolregistry",
+      "label": "ToolRegistry",
+      "degree": 12
+    },
+    {
+      "id": "models_conversation_entry_conversationentry",
+      "label": "ConversationEntry",
+      "degree": 12
+    },
+    {
+      "id": "request_decision_request_decisionrequest",
+      "label": "DecisionRequest",
+      "degree": 11
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Evidence",
+      "target": "WorkflowStage",
+      "source_files": [
+        "models/evidence.py",
+        "enums/workflow_stage.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Incident",
+      "target": "WorkflowStage",
+      "source_files": [
+        "models/incident.py",
+        "enums/workflow_stage.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "StateManager",
+      "target": "IncidentRepository",
+      "source_files": [
+        "agent/state_manager.py",
+        "storage/incident_repository.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "IncidentRepository",
+      "target": "IncidentStatus",
+      "source_files": [
+        "storage/incident_repository.py",
+        "enums/incident_status.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "IncidentRepository",
+      "target": "ConversationEntry",
+      "source_files": [
+        "storage/incident_repository.py",
+        "models/conversation_entry.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `SREWebApp` connect `Agent Decision Flow` to `LLM Adapter Runtime`, `Incident Repository`, `Incident State Management`, `LLM Error Handling`, `Conversation Entry Model`?",
+      "why": "High betweenness centrality (0.279) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 9 inferred relationships involving `IncidentRepository` (e.g. with `StateManager` and `IncidentStatus`) actually correct?",
+      "why": "`IncidentRepository` has 9 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `LLM Adapter Runtime` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `IncidentRepository` connect `Incident Repository` to `Incident State Management`, `Domain Models Module`, `Conversation Entry Model`, `Evidence Model`, `Status Transition Model`?",
+      "why": "High betweenness centrality (0.138) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 11 inferred relationships involving `SREWebApp` (e.g. with `OpenAICompatibleLLMAdapter` and `StateManager`) actually correct?",
+      "why": "`SREWebApp` has 11 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Incident Repository` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.1032258064516129 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Incident` connect `Incident State Management` to `Incident Repository`, `Agent Decision Flow`, `Domain Models Module`, `Evidence Model`, `Status Transition Model`?",
+      "why": "High betweenness centrality (0.130) - this node is a cross-community bridge."
+    }
+  ]
+}

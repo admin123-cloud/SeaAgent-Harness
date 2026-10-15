@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from pydantic import ValidationError
-
+from sre_agent.agent.runtime import AgentRuntime
 from sre_agent.agent.openai_compatible_llm_adapter import OpenAICompatibleLLMAdapter
 from sre_agent.agent.state_manager import StateManager
 from sre_agent.config.llm_settings import LLMSettings
@@ -28,6 +28,7 @@ from sre_agent.models.incident import Incident
 from sre_agent.request.decision_request import DecisionRequest
 from sre_agent.response.decision_response import DecisionResponse
 from sre_agent.storage import IncidentRepository, SQLiteDatabase
+from sre_agent.tools.default_tools import build_default_registry
 
 _HTML = r'''<!doctype html>
 <html lang="zh-CN">
@@ -66,6 +67,7 @@ class SREWebApp:
         self.repository = IncidentRepository(self.database)
         self.repository.initialize()
         self.lock = threading.Lock()
+        self.registry = build_default_registry()
 
     @staticmethod
     def _public_incident(incident: Incident) -> dict[str, object]:
@@ -141,25 +143,27 @@ class SREWebApp:
                 ],
                 "conversation_message": content,
             }
+            # 记录会话
             self.repository.add_conversation_entry(
                 incident_id,
                 ConversationEntry(
-                    role="agent", kind="llm_request", content="提交诊断请求到模型适配器",
+                    role="agent",
+                    kind="llm_request",
+                    content="提交诊断请求到模型适配器",
                     data={"task": DecisionTask.DIAGNOSE.value, "context": context},
                 ),
             )
             try:
-                settings = LLMSettings()
-                adapter = OpenAICompatibleLLMAdapter(settings)
-                try:
-                    raw_decision: object = asyncio.run(adapter.decide(DecisionRequest(
-                        task=DecisionTask.DIAGNOSE,
-                        incident_id=incident_id,
-                        goal=incident.goal,
-                        context=context,
-                    )))
-                finally:
-                    asyncio.run(adapter.aclose())
+                raw_decision = asyncio.run(
+                    self.run_agent(
+                        DecisionRequest(
+                            task=DecisionTask.DIAGNOSE,
+                            incident_id=incident_id,
+                            goal=incident.goal,
+                            context=context,
+                        )
+                    )
+                )
 
                 # 兼容适配器迁移期间的旧 DecisionResponse 返回值。
                 if isinstance(raw_decision, DecisionResponse):
@@ -208,15 +212,71 @@ class SREWebApp:
                 )
             except Exception as exc:  # noqa: BLE001 - 页面要保留可诊断错误，不把服务打崩
                 error = f"模型调用未完成：{type(exc).__name__}: {exc}"
-                self.repository.add_conversation_entry(
-                    incident_id, ConversationEntry(role="agent", kind="error", content=error)
-                )
+                failed_state = self.repository.get_incident(incident_id)
+
+                if failed_state and failed_state.status in {
+                    IncidentStatus.PLANNING,
+                    IncidentStatus.DIAGNOSING,
+                    IncidentStatus.ACTING,
+                    IncidentStatus.VERIFYING,
+                }:
+                    StateManager(
+                        failed_state,
+                        self.repository,
+                    ).transition_to(
+                        IncidentStatus.FAILED,
+                        reason=error[:500],
+                    )
+
                 self.repository.add_conversation_entry(
                     incident_id,
-                    ConversationEntry(role="assistant", kind="message", content="我已记录这条事件，但当前模型调用未完成。请查看右侧处理过程中的错误详情。"),
+                    ConversationEntry(
+                        role="agent",
+                        kind="error",
+                        content=error,
+                    ),
                 )
         return self.get_incident(incident_id)
 
+    async def run_agent(self,request:DecisionRequest,) -> AgentDecision:
+        settings = LLMSettings()
+        adapter = OpenAICompatibleLLMAdapter(settings)
+        try:
+            runtime = AgentRuntime(
+                llm=adapter,
+                registry=self.registry,
+                max_rounds=5,
+                event_sink= lambda event_type, data: (
+                    self.record_runtime_event(
+                        request.incident_id,
+                        event_type,
+                        data,
+                    )
+                ),
+            )
+
+            return await runtime.run(request)
+        finally:
+            await adapter.aclose()
+
+    def record_runtime_event(self,incident_id:str,event_type: str,data: dict[str, object],) -> None:
+        labels = {
+            "tool_call": "Runtime 请求调用工具",
+            "tool_result": "Runtime 收到工具结果",
+        }
+
+        self.repository.add_conversation_entry(
+            incident_id,
+            ConversationEntry(
+                role="agent",
+                kind="process",
+                content=labels.get(
+                    event_type,
+                    f"Runtime 事件：{event_type}",
+                ),
+                data=data,
+            ),
+        )
 
 class RequestHandler(BaseHTTPRequestHandler):
     app: SREWebApp
