@@ -1,13 +1,13 @@
 import asyncio
 
 from agent import AgentRuntime
-from model import DecisionTask
-from model import (
+from model.enums import DecisionTask
+from model.models import (
     FinalDecision,
     ToolCall,
     ToolCallDecision,
 )
-from model import DecisionRequest
+from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from tools.default_tools import build_default_registry
 

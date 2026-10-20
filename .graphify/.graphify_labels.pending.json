@@ -1,5 +1,5 @@
 {
-  "0": "IncidentRepository",
+  "0": "database/sqlite_database.py",
   "1": "IncidentRepository",
   "2": "SREWebApp",
   "3": "Humanizer: remove AI writing patterns",
@@ -12,7 +12,6 @@
   "13": "plugin.json",
   "15": "marketplace.json",
   "23": "Guide for agents",
-  "24": "SQLiteDatabase",
   "25": "model/models/kubernetes_observation.py",
   "26": "model/response/__init__.py",
   "27": "scripts/__init__.py"

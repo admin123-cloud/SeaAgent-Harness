@@ -8,7 +8,7 @@ from openai import (
     PermissionDeniedError,
     RateLimitError,
 )
-from agent.llm_errors import (
+from model.errors.llm_errors import (
     LLMAuthenticationError,
     LLMProviderError,
     LLMRateLimitError,

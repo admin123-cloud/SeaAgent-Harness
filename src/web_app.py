@@ -20,12 +20,12 @@ from agent import AgentRuntime
 from agent.openai_compatible_llm_adapter import OpenAICompatibleLLMAdapter
 from agent.state_manager import StateManager
 from config import LLMSettings
-from model import DecisionTask
-from model import IncidentStatus
-from model.models.conversation_entry import ConversationEntry
-from model import AgentDecision, FinalDecision, ToolCallDecision
-from model import Incident
-from model import DecisionRequest
+from model.enums import DecisionTask
+from model.enums import IncidentStatus
+from model.models import ConversationEntry
+from model.models import AgentDecision, FinalDecision, ToolCallDecision
+from model.models import Incident
+from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from database import IncidentRepository, SQLiteDatabase
 from tools.default_tools import build_default_registry
@@ -238,7 +238,7 @@ class SREWebApp:
                 )
         return self.get_incident(incident_id)
 
-    async def run_agent(self,request:DecisionRequest,) -> AgentDecision:
+    async def run_agent(self,request:DecisionRequest,) -> FinalDecision:
         settings = LLMSettings()
         adapter = OpenAICompatibleLLMAdapter(settings)
         try:

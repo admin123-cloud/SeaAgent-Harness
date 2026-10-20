@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from agent.llm_errors import ToolNotFoundError
+from model.errors.llm_errors import ToolNotFoundError
 from model.models import ToolCall, ToolResult
 
 

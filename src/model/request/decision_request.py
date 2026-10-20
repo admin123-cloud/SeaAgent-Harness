@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 
 from model.enums.decision_task import DecisionTask
 
@@ -13,4 +13,4 @@ class DecisionRequest(BaseModel):
     # 事件目标
     goal: str
     # 上下文 由调用方提前脱敏
-    context: dict[str, object]
+    context: dict[str, object] = Field(description="上下文必须已脱敏")
