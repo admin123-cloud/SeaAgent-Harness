@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "updated_at": "2026-10-21T00:00:00Z",
+  "allowed_tools": [
+    "k8s_list_pods",
+    "k8s_describe_pod",
+    "k8s_get_events",
+    "k8s_get_pod_logs",
+    "jenkins_get_build",
+    "jenkins_get_console"
+  ],
+  "enabled": true,
+  "validation_status": "valid",
+  "source": "builtin",
+  "requested_tools": [],
+  "package_meta": {
+    "category": "sre",
+    "language": "zh-CN",
+    "version": "1.0.0"
+  }
+}

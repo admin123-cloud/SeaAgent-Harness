@@ -27,3 +27,4 @@ class SkillInvalid(SkillError):
 
 class SkillImportError(SkillInvalid):
     """zip 导入失败。"""
+

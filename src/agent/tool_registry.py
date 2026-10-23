@@ -109,11 +109,11 @@ class ToolRegistry:
                 "工具调用超时",
                 "timeout",
             )
-        except Exception:
+        except Exception as exc:
             return self._failure_result(
                 tool_call,
                 started,
-                "处理异常",
+                f"处理异常: {exc}",
                 "handler_error",
             )
 
@@ -133,3 +133,15 @@ class ToolRegistry:
             error_type=error_type,
             elapsed_ms=int((perf_counter() - started) * 1000),
         )
+
+
+from tools.default_tools import build_default_registry
+from skills import SkillRegistry, SkillToolkit
+from skills.skill_manager import FileSkillStore
+from pathlib import Path
+
+tk = SkillToolkit(SkillRegistry(
+    builtin=FileSkillStore(Path("skills"), source="builtin", read_only=True),
+    team=FileSkillStore(Path("../.sre-agent-data/skills"))))
+reg = build_default_registry(tk)
+print([s.name for s in reg.list_specs()])   # 期望 ['read_skill', 'demo_echo']

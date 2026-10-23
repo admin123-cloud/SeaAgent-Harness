@@ -4,11 +4,11 @@
   第 1 层   加载与注册    FileSkillStore（磁盘 <-> SkillDetail）、SkillRegistry（内存索引）
   第 1.5 层 导入         SkillImporter（zip -> 校验 -> 规范化 -> 安装），"宽进严出"：加载器只认内部标准格式
   第 2 层   提供给 LLM    SkillToolkit（目录快照、read_skill、read_skill_resource）
-  第 3 层   提供给 Harness SkillAdminService（增删改查、导入、启停、校验、审计，带 Actor 授权）
+  第 3 层   提供给 Harness SkillAdminService（增删改查、导入、启停、校验、审计）
 
 磁盘布局：
   内置库  src/skills/<group>/<name>/...                  只读，skill_id 如 jenkins/build-failure-triage
-  用户库  <data>/skills/u/<owner>/<slug>/...             可写，skill_id 固定以 u/ 开头
+  团队库 <data>/skills/<group>/<name>
   每个包： SKILL.md（frontmatter: name/description + 正文）、meta.json（Harness 字段，模型读不到）、其余 = 资源
 
 依赖：核心逻辑只用标准库和 pydantic；PyYAML 仅在导入 zip 时才需要（延迟导入）。
@@ -22,19 +22,16 @@ import tempfile
 import threading
 from pathlib import Path
 
-from model import errors
 from model.errors import SkillReadOnly
-from src.model.errors import SkillInvalid, SkillNotFound,SkillError
+from model.errors import SkillInvalid, SkillNotFound,SkillError
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping
-from src.skills.models import SkillDetail,SkillSummary
+from skills.models import SkillDetail,SkillSummary
 
 LOAD_REF_PREFIX = "skill://"
-USER_NAMESPACE = "u"
 
 _SKILL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(?:/[a-z0-9][a-z0-9_-]*)*$")
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")  # 与 Agent Skills 规范的 name 规则一致
-_OWNER_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _RESERVED_FILES = {"SKILL.md", "meta.json"}  # 包内保留文件：不算资源，模型不可读
 _BAD_PATH_CHARS = re.compile(r'[<>:"|?*\x00-\x1f]')
 _BLOCK_SCALAR_RE = re.compile(r"[>|][+-]?\d?[+-]?")
@@ -63,24 +60,10 @@ def check_slug(slug: str) -> str:
         raise SkillInvalid(f"非法 slug: {slug!r}（小写字母、数字、单个连字符，最长 64）")
     return slug
 
-
-def owner_slug(owner: str) -> str:
-    """把任意 owner 标识转成可放进路径的短名；不合规时追加哈希，避免不同 owner 撞名。"""
-    if not owner:
-        raise SkillInvalid("owner 不能为空")
-    if _OWNER_SLUG_RE.fullmatch(owner) and len(owner) <= 40:
-        return owner
-    base = re.sub(r"[^a-z0-9_-]+", "-", owner.lower()).strip("-_")[:24] or "user"
-    return f"{base}-{hashlib.sha1(owner.encode('utf-8')).hexdigest()[:6]}"
-
-
-def user_skill_id(owner: str, slug: str) -> str:
-    return f"{USER_NAMESPACE}/{owner_slug(owner)}/{check_slug(slug)}"
-
-
 # 要做一次前置判断  只有vaild和enable才能给模型使用
 def summary_of(detail: SkillDetail) -> SkillSummary:
     """第一层目录条目。load_ref 是逻辑引用，不暴露真实文件路径。"""
+    # load_ref = load reference,模型只拿它说"我要读这本手册"，Toolkit 负责换算成 skill_id → 查索引 → 返回内容。
     return SkillSummary(
         skill_id=detail.skill_id,
         name=detail.name,
@@ -105,7 +88,6 @@ def _atomic_write(path: Path, content: str) -> None:
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
-
 
 def _unquote(v: str) -> str:
     if len(v) >= 2 and v[0] == v[-1] == '"':
@@ -157,7 +139,7 @@ class FileSkillStore:
     """文件系统存储：一个根目录 = 一个 skill 库。"""
     def __init__(self, root: Path | str, *, source: Literal["builtin"] | None = None, read_only: bool = False):
         self.root = Path(root).resolve()
-        self.fixed_source = source      # 内置库强制 "builtin"；用户库从 meta.json 读
+        self.fixed_source = source      # 内置库强制 "builtin"；团队库从 meta.json 读
         self.read_only = read_only
 
     # -- 路径 ---------------------------------------------------------------
@@ -182,7 +164,7 @@ class FileSkillStore:
 
     """skill内置 加载、注册逻辑 """
 
-    # -- 读 读取完整 SKILL.md 指引；仅加载已启用且校验通过的 Skill。 ---------------------------------------------
+    # -- 读 读取完整 SKILL.md 指引；此处不过滤 enabled/validation，过滤发生在 Registry.summaries()。 -------------
     def load(self, skill_id: str) -> SkillDetail:
         d = self._dir(skill_id)
         md = d / "SKILL.md"
@@ -191,7 +173,7 @@ class FileSkillStore:
         try:
             front, body = parse_skill_md(md.read_text(encoding="utf-8"))
             meta_file = d / "meta.json"
-            # 缺 meta.json 时按"最不信任"的默认值处理：未启用、待校验、私有
+            # 缺 meta.json 时按"最不信任"的默认值处理：未启用、待校验
             meta: dict[str, Any] = json.loads(meta_file.read_text(encoding="utf-8")) if meta_file.is_file() else {}
             builtin = self.fixed_source == "builtin"
             return SkillDetail(
@@ -201,14 +183,11 @@ class FileSkillStore:
                 instructions=body,
                 resources=self._list_resources(d),
                 version=str(meta.get("version", "0")),
-                owner=meta.get("owner"),
                 updated_at=meta.get("updated_at") or datetime.fromtimestamp(md.stat().st_mtime, tz=timezone.utc),
                 allowed_tools=frozenset(meta.get("allowed_tools", [])),
-                permissions=frozenset(meta.get("permissions", [])),
                 enabled=bool(meta.get("enabled", False)),
                 validation_status=meta.get("validation_status", "pending"),
                 source="builtin" if builtin else meta.get("source", "created"),
-                scope="shared" if builtin else meta.get("scope", "private"),
                 requested_tools=frozenset(meta.get("requested_tools", [])),
                 package_meta=dict(meta.get("package_meta", {})),
             )
@@ -253,14 +232,11 @@ class FileSkillStore:
     def _write_manifest(d:Path,detail:SkillDetail) -> None:
         meta = {
             "version": detail.version,
-            "owner": detail.owner,
             "updated_at": detail.updated_at.isoformat(),
             "allowed_tools": sorted(detail.allowed_tools),
-            "permissions": sorted(detail.permissions),
             "enabled": detail.enabled,
             "validation_status": detail.validation_status,
             "source": detail.source,
-            "scope": detail.scope,
             "requested_tools": sorted(detail.requested_tools),
             "package_meta": detail.package_meta,
         }
@@ -274,7 +250,7 @@ class FileSkillStore:
             raise SkillReadOnly(detail.skill_id)
         d = self._dir(detail.skill_id)
         d.mkdir(parents=True, exist_ok=True)
-        self._w
+        self._write_manifest(d,detail)
 
     """安装一个完整的包（SKILL.md + meta.json + 资源）：先写暂存目录，再整体换入，失败可回滚。"""
     def install_package(self, detail: SkillDetail, files: Mapping[str, bytes]) -> None:
@@ -319,13 +295,13 @@ class FileSkillStore:
             raise SkillNotFound(skill_id)
         shutil.rmtree(d)
 
-"""内存索引：内置库（只读）+ 用户库（可写）。所有读写都过这一层。"""
+"""内存索引：内置库（只读）+ 团队库（可写）。所有读写都过这一层。"""
 class SkillRegistry:
-    def __init__(self,builtin:FileSkillStore,user:FileSkillStore) -> None:
-        self.builtin = builtin
-        self.user = user
+    def __init__(self,builtin:FileSkillStore,team:FileSkillStore) -> None:
+        self._builtin = builtin
+        self._team = team
         self._skills : dict[str, SkillDetail] = {}
-        self.load_errors = dict[str,str] = {}
+        self.load_errors : dict[str,str] = {}
         # 管理 API 的"读-改-写"需要在同一把锁下完成
         self.lock = threading.Lock()
         self.reload()
@@ -334,14 +310,84 @@ class SkillRegistry:
         skills: dict[str, SkillDetail] = {}
         errors: dict[str,str] = {}
         # 内置的skill 不修改
-        for is_builtin, store in ((True, self._builtin), (False, self._user)):
+        for is_builtin, store in ((True, self._builtin), (False, self._team)):
             found, errs = store.load_all()
             errors.update(errs)
             for s in found:
-                in_user_ns = s.skill_id.startswith(USER_NAMESPACE + "/")
-                if is_builtin == in_user_ns:  # 内置不得占用 u/，用户 skill 必须在 u/ 下
-                    errors[s.skill_id] = "命名空间非法：内置 skill 不能以 u/ 开头，用户 skill 必须以 u/ 开头"
+                if not is_builtin and s.skill_id in skills:  # 内置库已占用的 id
+                    errors[s.skill_id] = "与内置 skill 冲突"
                     continue
                 skills[s.skill_id] = s
         with self.lock:
             self._skills, self.load_errors = skills, errors
+
+    # 获取skill列表
+    def summaries(self) -> list[SkillSummary]:
+        with self.lock:
+            # 1. 创建一个空列表，用于保存结果
+            result = []
+            # 2. 从内存索引中获取所有 Skill
+            skills = list(self._skills.values())
+            # 3. 按照 skill_id 进行排序
+            skills.sort(key=lambda skill: skill.skill_id)
+
+            # 4. 遍历排序后的 Skill
+            for skill in skills:
+                # 5. 判断 Skill 是否启用
+                if not skill.enabled:
+                    continue
+                if skill.validation_status != "valid":
+                    continue
+                summary = summary_of(skill)
+                result.append(summary)
+            return result
+
+    # 未访问其他方法直接修改内存里的_skills  此处加锁
+    def get(self,skill_id:str) -> SkillDetail:
+        with self.lock:
+            skills = self._skills
+            if skill_id not in skills:
+                raise SkillNotFound(skill_id)
+            return skills[skill_id]
+
+    # 检查skill是否支持修改
+    """假定已持锁：返回详情；不存在抛 SkillNotFound，内置抛 SkillReadOnly。"""
+    def _writable_locked(self,skill_id:str) -> SkillDetail:
+        # 直接从内存读取 防止死锁
+        current = self._skills.get(skill_id)
+        if current is None:
+            raise SkillNotFound(f"skill 不存在: {skill_id}")
+        if current.source == "builtin":
+            raise SkillReadOnly(skill_id)
+        return current
+
+    # 场景：全量写入，导入/编辑后调用
+    # 过程：校验内置 id → team.save() 落盘 → 更新内存索引
+    def upsert(self,detail:SkillDetail) -> None:
+        with self.lock:
+            # 同样要挡内置 id：防止有人拿着 source="created" 但 id 是内置路径的对象写入团队库
+            existing = self._skills.get(detail.skill_id)
+            if existing is not None and existing.source == "builtin":
+                raise SkillReadOnly(detail.skill_id)
+            self._team.save(detail)
+            self._skills[detail.skill_id] = detail
+
+    # 过程：读-改-写，注意全程持锁 + model_copy 跳过校验只改标量安全
+    # 场景：get → 修改 → upsert 的组合便捷方法
+    def set_enabled(self,skill_id:str, enabled:bool) -> SkillDetail:
+        with self.lock:
+            current = self._writable_locked(skill_id)
+            updated = current.model_copy(update={
+                "enabled":enabled,
+                "version":_bump(current.version),
+                "updated_at":_now(),
+            })
+            self._team.save(updated)
+            self._skills[skill_id] = updated
+            return updated
+
+    def remove(self,skill_id:str) -> None:
+        with self.lock:
+            self._writable_locked(skill_id)
+            self._team.delete(skill_id)
+            self._skills.pop(skill_id)

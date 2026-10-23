@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import threading
+from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
@@ -28,7 +29,8 @@ from model.models import Incident
 from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from database import IncidentRepository, SQLiteDatabase
-from tools.default_tools import build_default_registry
+from tools import build_default_registry
+from skills import SkillRegistry,FileSkillStore,SkillToolkit
 
 _HTML = r'''<!doctype html>
 <html lang="zh-CN">
@@ -67,7 +69,14 @@ class SREWebApp:
         self.repository = IncidentRepository(self.database)
         self.repository.initialize()
         self.lock = threading.Lock()
-        self.registry = build_default_registry()
+
+        src_dir = Path(__file__).parent
+        skill_registry = SkillRegistry(
+            builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
+            team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
+        )
+        self.toolkit = SkillToolkit(skill_registry)
+        self.registry = build_default_registry(self.toolkit)
 
     @staticmethod
     def _public_incident(incident: Incident) -> dict[str, object]:

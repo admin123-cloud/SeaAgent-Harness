@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "updated_at": "2026-10-21T00:00:00Z",
+  "allowed_tools": [],
+  "enabled": true,
+  "validation_status": "valid",
+  "source": "builtin",
+  "requested_tools": [],
+  "package_meta": {
+    "category": "sre",
+    "language": "zh-CN",
+    "version": "1.0.0"
+  }
+}

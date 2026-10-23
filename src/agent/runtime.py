@@ -1,14 +1,13 @@
 from collections.abc import Callable
 
-from agent.llm_adapter import LLMAdapter
-from agent.tool_registry import ToolRegistry
+from agent import LLMAdapter
+from agent import ToolRegistry
 from model.enums import PermissionMode
 from model.models import FinalDecision, ToolCallDecision, ToolResult
 from model.request import DecisionRequest
+from model.errors import AgentRuntimeError
+from skills import SkillToolkit
 
-
-class AgentRuntimeError(RuntimeError):
-    """Agent Runtime 执行失败。"""
 
 # AgentRuntime agent运行时
 
@@ -18,7 +17,11 @@ class AgentRuntime:
     def __init__(
             self,
             llm: LLMAdapter,
+            # tool注册
             registry: ToolRegistry,
+            # skill注册
+            skill_toolkit: SkillToolkit,
+
             max_rounds:int = 5,
             event_sink : RuntimeEventSink | None = None,
             permission_mode: PermissionMode = PermissionMode.REQUEST_APPROVAL,
@@ -28,6 +31,7 @@ class AgentRuntime:
             raise ValueError("max_rounds 必须大于 0")
         self.llm = llm
         self.registry = registry
+        self.skill_toolkit = skill_toolkit
         self.max_rounds = max_rounds
         self.event_sink  = event_sink
         # 会话级权限模式；真正的审批/放行逻辑由后续 PermissionPolicy 接入。
@@ -53,6 +57,13 @@ class AgentRuntime:
         context = dict(request.context)
         context.setdefault("available_tools", self._available_tools())
         context.setdefault("agent_history", [])
+
+        if "available_skills" not in context:
+            available_skills = []
+            for skill in self.skill_toolkit.catalog():
+                skill_data = skill.model_dump(mode="json")
+                available_skills.append(skill_data)
+            context["available_skills"] = available_skills
 
         return request.model_copy(
             update={"context": context}

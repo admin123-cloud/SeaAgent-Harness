@@ -66,6 +66,10 @@ class OpenAICompatibleLLMAdapter:
                             '"recommendations":[]'
                             "}}\n\n"
 
+                            "上下文中的 available_skills 是可用的 Skill 手册目录。\n"
+                            "当问题匹配某个 skill 的 description 时，先用 tool_call 调用 read_skill 工具"
+                            "（参数用该 skill 的 load_ref）加载完整指引，再按指引组织诊断。\n\n"
+
                             "需要外部信息时返回 kind=tool_call；"
                             "信息足够时返回 kind=final。"
                         ),

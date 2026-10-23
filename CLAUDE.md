@@ -49,7 +49,6 @@ src/database/                  SQLite 数据库与事件仓储
 src/model/                     请求、响应、状态与领域模型
 src/tools/                     受控工具实现
 src/scripts/                   项目内验证脚本
-src/skills/humanizer/          Humanizer Skill 源码
 src/web_app.py                 本地事件工作台入口
 src/main.py                    命令行演示入口
 .graphify/                     项目架构关系图、报告和 Graphify 缓存

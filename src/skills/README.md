@@ -43,5 +43,3 @@ src/skills/
 ├── kubernetes/
 └── jenkins/
 ```
-
-`humanizer/` 是已有资产，本次保留且未改动。
