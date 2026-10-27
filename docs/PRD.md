@@ -7,7 +7,7 @@
 | 产品 | SRE Agent |
 | 版本 | V0.1 基础层 |
 | 状态 | Draft / SDD Baseline |
-| 日期 | 2026-10-19 |
+| 日期 | 2026-10-27 |
 | 目标用户 | SRE、平台工程师、应用开发者 |
 | 关联任务 | [implementation.md](task/implementation.md) |
 
@@ -309,7 +309,7 @@ stateDiagram-v2
 
 V0.1 基础层完成需要同时满足：
 
-- MCP Server 能在合法配置下启动并提供已登记的只读工具。
+- MCP Server 能在合法配置下启动并提供已登记的只读工具。（2026-10-27 起暂缓：MCP 接入暂缓，此条按届时裁定的工具接入形态重新验收。）
 - 工作区、Kubernetes、Jenkins 的边界和错误行为有可重复验证记录。
 - `Incident`、`Evidence`、`StatusTransition`、状态枚举和 `StateManager` 契约完整。
 - 至少完成一个不执行变更的诊断闭环，结论可引用证据。
@@ -333,12 +333,13 @@ V0.1 基础层完成需要同时满足：
 - Incident 工作状态使用本地 SQLite 持久化，默认文件为 `.sre-agent-data/sre-agent.sqlite3`；该目录已由 `.gitignore` 排除。SQLite 使用 Python 标准库 `sqlite3`，不增加第三方依赖。
 - 第一阶段使用 `incidents`、`evidence`、`status_transitions` 三张表保存 Incident 当前状态、证据和状态变更记录；第三阶段的知识库、会话记忆和历史事件检索仍需单独设计。
 - SQLite 访问集中在 `IncidentRepository`。`evidence` 表对 `(incident_id, evidence_id)` 设置复合主键，不能只靠先查询再插入来防重。schema 版本通过 SQLite `PRAGMA user_version` 管理。
+- 2026-10-27：MCP 接入暂缓（用户裁定）。原 MCP Server 只读工具实现已移出仓库，SDD-002 转 `BLOCKED`；仓库仅保留 `src/tools/catalog.py` 工具候选清单（命名约定 `<领域>_<动作>_<对象>`）。FR-001/002/003 的能力要求不变，后续按"直接 ToolRegistry 注册"或"重新立项 MCP Server"两种形态之一实现，进入第二阶段前重新裁定。
 
 ### 待决策问题
 
 1. LLM Adapter 首个实现：OpenAI、OpenAI-compatible 私有模型，还是本地模型？
 2. MCP Client 的传输和连接生命周期如何管理？
-3. 诊断结论的置信度、证据引用和人工确认格式是否需要独立 schema？
+3. 诊断结论的置信度、证据引用和人工确认格式是否需要独立 schema？（2026-10-27 真模型验证发现：模型会把工具 call_id 填入 `DecisionResponse.evidence_ids`，与 FR-006 定义的 `evidence_id` 引用口径不一致，此决策需提前。）
 4. V0.1 的可观测性采用标准日志、OpenTelemetry，还是先保留结构化事件？
 5. Skill 的发布、权限、版本和回滚由 Agent 管理，还是由外部注册中心管理？
 6. 第二阶段哪些修复动作允许自动执行，哪些动作必须人工确认？

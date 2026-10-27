@@ -9,9 +9,9 @@
 | 项目 | SRE Agent |
 | 规范方式 | SDD（Specification-Driven Development） |
 | 当前版本 | V0.1 基础层 |
-| 当前日期 | 2026-10-19 |
+| 当前日期 | 2026-10-27 |
 | 总体状态 | `IN_PROGRESS` |
-| 当前主线 | 阶段一：SDD-005 LLM Adapter 结构化决策 |
+| 当前主线 | 阶段一验收收尾（SDD-005）＋ Skill/Tool 注册链路接入 |
 
 ## 2. 状态与更新规则
 
@@ -41,17 +41,17 @@
 | ID | 任务 | 依赖 | 状态 | 验收摘要 |
 | --- | --- | --- | --- | --- |
 | SDD-001 | 建立 SDD 规范文档体系 | 无 | `DONE` | 根目录规范、PRD、任务台账已建立 |
-| SDD-002 | MCP Server 受控工具层 | 无 | `VERIFYING` | 工作区、Kubernetes、Jenkins 只读工具已存在，待系统化验收 |
+| SDD-002 | MCP Server 受控工具层 | 无 | `BLOCKED` | 2026-10-27 裁定 MCP 接入暂缓；仓库仅存工具候选清单，待重新立项 |
 | SDD-003 | Incident 状态与证据模型 | SDD-001 | `DONE` | 模型字段和输入校验已实现；UTC 行为已人工验证 |
 | SDD-004 | StateManager 与 SQLite Incident 仓储 | SDD-003 | `IN_PROGRESS` | 可持久化/恢复 Incident，执行状态流转并追加去重证据 |
-| SDD-005 | LLM Adapter 结构化决策 | SDD-004 | `IN_PROGRESS` | 模型无关、结构化输出、超时和错误可控 |
+| SDD-005 | LLM Adapter 结构化决策 | SDD-004 | `IN_PROGRESS` | 模型无关、结构化输出、超时和错误可控；真模型最小调用已通过（2026-10-27） |
 | SDD-006 | MCP Client | SDD-002、SDD-005 | `TODO` | 能调用只读 MCP 工具并标准化错误 |
 | SDD-007 | Planner / Diagnose 只读闭环 | SDD-004、SDD-006 | `TODO` | 创建 Incident → 收集状态/事件/日志 → 形成假设与建议 |
 | SDD-008 | Knowledge、Memory、Context 分层 | SDD-007 | `TODO` | 证据、历史事件和上下文有明确边界 |
 | SDD-009 | Verify 与受控 Act | SDD-007 | `TODO` | 生成建议并在确认后执行安全动作，具备审计和回滚 |
 | SDD-010 | OODA 外层循环与 ReAct 内层执行 | SDD-005、SDD-006、SDD-007、SDD-008、SDD-009 | `TODO` | 有界循环执行工具，达到后置条件才结束 |
 | SDD-011 | 持续积累、评估、定位和纠偏 | SDD-010 | `TODO` | 反馈进入知识、Skill、提示词和回归评估 |
-| SDD-012 | 高级 Skill/Tool 管理页面 | SDD-005、SDD-006 | `TODO` | 页面支持 Skill ZIP 导入与 Skill/Tool 元数据 CRUD、启停；变更审计并作用于后续请求 |
+| SDD-012 | 高级 Skill/Tool 管理页面 | SDD-005、SDD-006 | `IN_PROGRESS` | 页面支持 Skill ZIP 导入与 Skill/Tool 元数据 CRUD、启停；变更审计并作用于后续请求 |
 
 ## 5. 当前任务明细
 
@@ -65,12 +65,15 @@
 
 ### SDD-002 MCP Server 受控工具层
 
-- 状态：`VERIFYING`
-- 已有实现：
+- 状态：`BLOCKED`
+- 状态变更：2026-10-27 用户裁定 MCP 接入暂缓；原 MCP Server 工具实现已移出仓库，下列“已有实现”仅为历史记录，当前不生效。
+- 历史实现（代码已不在仓库）：
   - 工作区列举、读取、搜索、受保护写入和预定义项目命令；
   - Kubernetes Pod、事件、描述和日志读取；
   - Jenkins 构建元数据和控制台尾部读取；
   - namespace、资源名、路径、命令、输出大小和超时限制。
+- 当前仓库现状：`src/tools/catalog.py` 仅登记工具候选清单（命名约定 `<领域>_<动作>_<对象>`、权限与风险元数据，不注册 handler）；`src/tools/jenkins.py`、`src/tools/kubernetes.py` 为空占位。
+- 解除条件：重新立项 MCP Server 或改为直接工具注册形态，并按下列验收标准执行边界验收。
 - 验收标准：
   - [ ] 配置缺失时启动失败且错误可定位；
   - [ ] 越界路径、敏感路径、非 allowlist namespace 被拒绝；
@@ -125,7 +128,8 @@
 | SDD-005-D OpenAI-compatible 实现 | `agent/openai_compatible_adapter.py` | `OpenAICompatibleLLMAdapter` | 调用兼容接口并把响应校验为 `DecisionResponse` |
 | SDD-005-E 调用可观测性 | `agent/llm_adapter.py` 及日志配置 | `LLMCallSummary` | 记录耗时、结果类型和错误类型，不记录密钥或完整上下文 |
 
-- 当前步骤：SDD-005-A 的 `DecisionTask`、`DecisionRequest`、`DecisionResponse` 和 SDD-005-B 的 `LLMAdapter` 接口已建立。请求由调用方提供已脱敏的 Incident 上下文；响应只表达计划、诊断结论、证据引用和建议，不携带可直接执行的工具调用。下一步开始 SDD-005-C：调用配置与错误类型。
+- 当前步骤：SDD-005-A/B（决策契约与 Adapter 接口）、SDD-005-C（`LLMSettings` 与 `llm_errors` 错误模型）、SDD-005-D（OpenAI-compatible 实现）已完成。2026-10-27 通过 `src/scripts/verify_runtime.py` 完成真模型最小调用验证：模型经 `available_tools`/`available_skills` 注入后主动调用 `demo_echo` 与 `read_skill`（`skill://sre/incident-triage`），两轮工具调用成功，最终结论通过 `DecisionResponse` 校验。请求由调用方提供已脱敏的 Incident 上下文；响应只表达计划、诊断结论、证据引用和建议，不携带可直接执行的工具调用。
+- 遗留：SDD-005-E 调用摘要日志（`LLMCallSummary`）未实现；超时/重试/错误归一化路径未系统验收；`verify_runtime.py` 缺可重复断言；`DecisionResponse.evidence_ids` 语义需收紧（真模型曾把工具 call_id 填入证据引用）。
 - 后续：依次完成配置/错误模型、一个 OpenAI-compatible 提供方、超时与有界重试、调用摘要日志；阶段性验收再验证真实模型调用、输出 schema 和错误处理。
 
 ## 6. 五阶段执行计划
@@ -135,10 +139,10 @@
 - 状态：`IN_PROGRESS`
 - 任务：SDD-003、SDD-004、SDD-005。
 - [ ] 完成 `Incident`、`Evidence`、SQLite 仓储和状态流转契约。
-- [ ] 定义 `LLMAdapter`，隔离供应商、模型配置和传输细节。
-- [ ] 定义结构化 Prompt 输入、决策输出和 schema 校验。
+- [x] 定义 `LLMAdapter`，隔离供应商、模型配置和传输细节。
+- [x] 定义结构化 Prompt 输入、决策输出和 schema 校验。
 - [ ] 增加超时、有限重试、错误归一化、敏感信息脱敏和调用记录。
-- [ ] 用一个真实模型或 OpenAI-compatible 接口完成最小调用验收。
+- [x] 用一个真实模型或 OpenAI-compatible 接口完成最小调用验收（2026-10-27 `verify_runtime.py` 真模型通过）。
 
 阶段验收：能够输入一个结构化 Incident，获得可解析的计划/诊断决策；模型不可直接执行工具；调用失败可以定位且不会泄露凭据。
 
@@ -194,8 +198,10 @@
 
 ### SDD-012 Skill 与 Tool 动态管理
 
-- 状态：`TODO`
+- 状态：`IN_PROGRESS`
 - 目标：通过页面展示和维护运行时已注册的 Skill 与 Tool；本任务不属于当前 LLM/只读诊断闭环的阻塞项。
+- 已有实现（2026-10-20 ~ 10-23）：内置 Skill 内容库（sre/kubernetes/jenkins 三组共 5 个 SKILL.md + meta.json + SOURCES）；`FileSkillStore`/`SkillRegistry`（builtin 只读 + team 可写双库、原子写、导入暂存与回滚）；`SkillToolkit`（目录快照 + `read_skill`，禁用/未校验按“不存在”口径过滤）；`read_skill` 已注册进默认工具表，`AgentRuntime` 已接入 `skill_toolkit` 并向上下文注入 `available_skills`。2026-10-27 真模型链路验证通过。
+- 未实现：第 3 层 `SkillAdminService`（增删改查、启停、校验、审计）、ZIP 导入页面、管理页面全部 UI。
 - Skill 管理：导入 `.zip` Skill 包并预览校验结果；创建 Skill 时填写名称、描述、分类、版本、适用任务、Markdown 指引、来源和许可证；支持查询、详情、更新、删除、启用和停用。
 - Tool 管理：支持查询、详情、创建、更新、删除、启用和停用；登记名称、用途、已注册实现绑定、输入/输出 Schema、权限、资源范围、风险、副作用、超时和版本。页面只维护注册信息与策略，不通过表单执行任意代码。
 - 生命周期：变更留存操作者、时间、来源和版本；启停变更从下一次新请求起生效；删除或停用后保留可追溯的历史记录。
@@ -204,11 +210,11 @@
 
 ## 7. 近期执行顺序
 
-1. 完成 SDD-003 的 `Incident` 字段、校验和序列化契约。
-2. 设计并实现 SDD-004 的 SQLite `IncidentRepository` 与 `StateManager`，覆盖保存/恢复、正常流转、阻塞、失败和证据去重。
-3. 设计并实现 SDD-005 的 `LLMAdapter` 和结构化决策协议。
-4. 对 SDD-002 现有工具做一次边界验收，为阶段二接入做准备。
-5. 阶段一验收通过后，再进入 MCP Client、Skill 和工具编排。
+1. `verify_runtime.py` 补齐可重复断言（结果为 `FinalDecision`、事件成对且 round 递增、工具结果 success 全真、`read_skill` 返回含 skill_id/instructions），并定案 FakeLLM 确定性回归与真模型冒烟的脚本分工。
+2. 收紧 `DecisionResponse.evidence_ids` 字段描述：只允许引用 Incident Evidence ID，不允许工具 call_id。
+3. 实现 SDD-005-E `LLMCallSummary` 调用摘要日志，并完成超时/重试/错误路径验收。
+4. 执行阶段一阶段验收（结构化 Incident 输入 → 可解析决策；调用失败可定位且不泄露凭据），随后关闭 SDD-003/004/005。
+5. 阶段一退出后按优先级进入 SDD-006 MCP Client 或 SDD-012 管理层；SDD-002 恢复 MCP 形态还是改走直接工具注册，届时重新裁定（候选清单见 `src/tools/catalog.py`）。
 
 ## 8. 变更记录
 
@@ -225,15 +231,21 @@
 | 2026-10-08 | SDD-005 决策契约与接口 | 建立 DecisionTask、DecisionRequest、DecisionResponse 与 LLMAdapter 异步接口 | 下一步实现 LLMSettings 和统一错误类型；真实模型调用与阶段验收待后续 |
 | 2026-10-10 | 本地事件工作台 | 增加 conversation_entries SQLite 迁移、事件 CRUD、消息处理 API 和本地 Web 工作台；过程记录与事件一起持久化 | 已完成编译和 API 冒烟；真实模型调用依赖本地 LLM_* 配置，MCP 采集闭环仍待 SDD-006/007 |
 | 2026-10-19 | SDD-012 高级功能需求 | 记录 Skill ZIP 导入、Skill/Tool 管理页面、CRUD、启停、审计和安全约束 | 仅登记待开发范围，未实现页面或后端功能 |
+| 2026-10-20 | Skill 内容库 | 新增 5 个内置 Skill 的 SKILL.md、SOURCES 与分组目录（sre/kubernetes/jenkins） | 内容入库，尚未接入运行时 |
+| 2026-10-23 | Skill 体系骨架 | 实现 FileSkillStore/SkillRegistry/SkillToolkit、skill 错误模型；`read_skill` 注册进默认工具表；AgentRuntime 增加 `skill_toolkit` 与 `available_skills` 注入 | 未做系统性验收 |
+| 2026-10-27 | SDD-002 暂缓 | 用户裁定 MCP 接入暂缓，原 MCP Server 代码已不在仓库；保留工具候选清单 | 状态转 `BLOCKED`，解除条件见任务明细 |
+| 2026-10-27 | SDD-005 真模型验证 | `verify_runtime.py` 以真实 OpenAI-compatible 模型完成最小调用：demo_echo + read_skill 两轮工具调用，`DecisionResponse` 校验通过 | 需补可重复断言；evidence_ids 契约待收紧 |
 
 ## 9. 阻塞与风险
 
 | 项目 | 影响 | 解除条件 | 状态 |
 | --- | --- | --- | --- |
-| Agent Runtime 尚未实现 | 无法执行完整诊断闭环 | 完成 SDD-003/004/005/006/007 | 开放 |
-| 尚未接通大模型 | 阶段一无法进入工具编排 | 完成 SDD-005 并通过结构化调用验收 | 开放 |
+| 诊断闭环未贯通 | AgentRuntime 主循环与 LLM 调用已验证，但与 Incident 持久化、真实采集工具尚未串成完整闭环 | 完成 SDD-006/007 并接入 StateManager | 开放 |
+| 尚未接通大模型 | 阶段一无法进入工具编排 | 完成 SDD-005 并通过结构化调用验收 | 已解除（2026-10-27 真模型最小调用通过） |
 | Skill/MCP 修复权限尚未定义 | 阶段二不能安全执行变更 | 为每类修复动作定义权限、确认、幂等、回滚和验证 | 开放 |
 | 知识与历史数据边界尚未定义 | 阶段三可能出现越权召回或过期知识 | 完成记忆分层、保留、脱敏和删除策略 | 开放 |
 | OODA/ReAct 停止条件尚未定义 | 阶段四可能循环过久或扩大风险 | 定义最大迭代、后置条件、风险阈值和人工升级 | 开放 |
 | 当前未建立统一测试目录 | MCP 边界验收缺少自动化证据 | 按任务验收标准补充测试或可重复冒烟 | 开放 |
 | Kubernetes/Jenkins 依赖外部环境 | 本地无法覆盖全部集成路径 | 提供受控测试环境或记录人工验证输出 | 开放 |
+| verify_runtime 缺可重复断言 | Skill/Runtime 链路验收依赖人眼，回归不可重复 | 补齐弱断言并定案脚本分工 | 开放 |
+| DecisionResponse.evidence_ids 契约模糊 | 模型可能把工具 call_id 当作证据引用，污染后续诊断结论的可信度 | 收紧字段描述并回归验证 | 开放 |
