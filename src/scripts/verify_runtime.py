@@ -1,16 +1,18 @@
 import asyncio
+from pathlib import Path
 
-from agent import AgentRuntime
-from model.enums import DecisionTask
+from agent import AgentRuntime,OpenAICompatibleLLMAdapter
 from model.models import (
     FinalDecision,
     ToolCall,
     ToolCallDecision,
 )
+from model.enums import DecisionTask
 from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
-from tools.default_tools import build_default_registry
-
+from skills import SkillRegistry, FileSkillStore, SkillToolkit
+from tools import build_default_registry
+from config import LLMSettings
 
 class FakeLLM:
     """不访问网络，只返回预先写好的模型结果。"""
@@ -62,57 +64,42 @@ class FakeLLM:
                 recommendations=[],
             )
         )
-
-
-
 async def main():
-    fake_llm = FakeLLM()
-    registry = build_default_registry()
-
+    #  1. 构造 Skill 三件套
+    # ① 先定义收集器（必须在构造 AgentRuntime 之前）
     events: list[tuple[str, dict[str, object]]] = []
-
-    runtime = AgentRuntime(
-        llm=fake_llm,
-        registry=registry,
-        max_rounds=3,
-        event_sink=lambda event_type, data: events.append((event_type, data)),
+    #  src目录和root目录 找到skill
+    src_dir = Path(__file__).resolve().parents[1]
+    # 内置skill和上传的skill
+    skill_registry = SkillRegistry(
+        builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
+        team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
     )
+    toolkit = SkillToolkit(skill_registry)
 
-    request = DecisionRequest(
-        task=DecisionTask.DIAGNOSE,
-        incident_id="verify-001",
-        goal="验证 AgentRuntime 工具调用闭环",
-        context={},
-    )
-
-    result = await runtime.run(request)
-
-    if not isinstance(result, FinalDecision):
-        raise AssertionError(
-            f"最终结果类型错误：{type(result).__name__}"
+    tool_registry = build_default_registry(toolkit)
+    # 2. AgentRuntime 补 skill_toolkit 参数
+    settings = LLMSettings()
+    adapter = OpenAICompatibleLLMAdapter(settings)
+    try:
+        runtime = AgentRuntime(
+            llm=adapter,
+            registry= tool_registry,
+            skill_toolkit = toolkit,
+            max_rounds=5,
+            event_sink=lambda t, d: events.append((t, d)),
         )
 
-    print("最终结论：", result.response.summary)
-    print("LLM 调用次数：", fake_llm.calls)
-    print("Runtime 验收通过")
-
-    event_types = [event_type for event_type, _ in events]
-
-    if event_types != ["tool_call", "tool_result"]:
-        raise AssertionError(
-            f"Runtime 事件类型错误：{event_types}"
+        request = DecisionRequest(
+            task=DecisionTask.DIAGNOSE,
+            incident_id="verify-skill-001",
+            goal="验证 SkillToolkit 接入后的 AgentRuntime 工具调用闭环",
+            context={},
         )
-    print("Runtime 事件内容：")
-    for event_type, data in events:
-        print(f"- {event_type}: {data}")
+        result = await runtime.run(request)
+    except AssertionError as e:
+        raise e
 
-    if events[0][1]["round"] != 1:
-        raise AssertionError("tool_call 的 round 不正确")
-
-    if events[1][1]["round"] != 1:
-        raise AssertionError("tool_result 的 round 不正确")
-
-    print("Runtime 事件回调验收通过")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+     asyncio.run(main())

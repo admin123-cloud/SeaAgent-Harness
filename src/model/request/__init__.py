@@ -1,1 +1,1 @@
-from decision_request import DecisionRequest
+from .decision_request import DecisionRequest

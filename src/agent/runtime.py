@@ -53,6 +53,7 @@ class AgentRuntime:
             for spec in self.registry.list_specs()
         ]
 
+    # 注入  available_tools / available_skills / agent_history=[]
     def _prepare_request(self, request:DecisionRequest) -> DecisionRequest:
         context = dict(request.context)
         context.setdefault("available_tools", self._available_tools())
