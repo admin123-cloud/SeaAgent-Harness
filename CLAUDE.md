@@ -43,14 +43,18 @@
 ## 4. 仓库结构约定
 
 ```text
+src/bootstrap.py               唯一接线点：构造 Tool/Skill 注册表并交给各入口
 src/agent/                     Agent Runtime、模型适配与状态管理
+src/tools/                     Tool 注册表（registry.py）与受控工具实现
+src/skills/                    Skill 存储（store.py）、注册表（registry.py）、read_skill 工具（tool.py）
+src/skills/<group>/<name>/     内置 Skill 包：SKILL.md（模型可读）+ meta.json（Harness 字段）+ 资源文件
 src/config/                    应用配置
 src/database/                  SQLite 数据库与事件仓储
-src/model/                     请求、响应、状态与领域模型
-src/tools/                     受控工具实现
+src/model/                     请求、响应、状态、错误与领域模型
 src/scripts/                   项目内验证脚本
 src/web_app.py                 本地事件工作台入口
 src/main.py                    命令行演示入口
+.sre-agent-data/               运行期数据（SQLite、团队 Skill 库），不入库
 .graphify/                     项目架构关系图、报告和 Graphify 缓存
 scripts/graphify_project.py    使用根目录 .graphify 的 Graphify 包装入口
 docs/PRD.md                   产品需求规格
@@ -81,6 +85,13 @@ docs/DEVELOPMENT_GUIDE.md      学习型协作与 Review 约定
 - Kubernetes namespace、Pod、容器和 Jenkins Job/Build 参数必须校验；错误信息可帮助排障，但不得泄露凭据。
 - 新增工具必须定义输入范围、输出结构、错误行为、超时和副作用，并在 PRD/任务验收标准中登记。
 
+### 包依赖方向
+
+- `tools` 不依赖 `agent`、`skills`。
+- `skills` 只依赖 `tools` 的公开接口（如 `ToolSpec`）和 `model`。
+- `agent` 不依赖 `bootstrap`；只有 `bootstrap` 可以依赖所有包。
+- 包的 `__init__.py` 只导出本包内的类型，不导出会牵出其他包的构造函数；跨包导入优先使用包的公开出口（如 `from tools import ToolRegistry`）。
+- 
 ## 7. 安全与风险边界
 
 - 默认绑定回环地址；对外暴露 MCP Server 时必须置于认证代理或安全隧道之后。
@@ -90,7 +101,7 @@ docs/DEVELOPMENT_GUIDE.md      学习型协作与 Review 约定
 
 ## 8. 验证与质量门禁
 
-每个任务至少明确一种可重复验证：静态检查、单元测试、接口冒烟、人工检查或命令输出。验证结果记录在 `docs/task/implementation.md`。
+每个任务至少明确一种可重复验证：静态检查、单元测试、接口冒烟、人工检查或命令输出。验证结果（命令、输出摘要、未验证项）记录在 `docs/task/implementation.md` 对应任务的“验证记录”中。
 
 默认原则：
 
@@ -98,6 +109,18 @@ docs/DEVELOPMENT_GUIDE.md      学习型协作与 Review 约定
 - 未经用户要求，不新增或运行与当前任务无关的测试。
 - 变更文档时检查链接、目录、状态、代码现状和编码；文本统一使用 UTF-8。
 - 任务只有在“实现完成 + 验收通过 + 文档同步”后才标记 `DONE`；未验证标记 `VERIFYING`，遇到外部依赖阻塞标记 `BLOCKED`。
+
+结构重构类任务（移动文件、拆分模块、调整依赖）额外遵守：
+
+- 搬家与改逻辑分开：同一步骤只做其中一类；搬家步骤不得改变任何函数的行为。
+- 每步完成后至少执行并记录三项检查：全包导入检查（`python -c "import agent, tools, skills, web_app"`）、依赖方向检查（见 §6）、既有验证脚本（`python -m scripts.verify_runtime`）。
+- 搬走的文件不保留空壳或兼容转发，除非任务明确要求过渡期；全仓库搜索确认无残留引用后再关闭步骤。
+
+涉及真实模型的验证脚本额外遵守：
+
+- 断言只覆盖 Harness 自己保证的行为（接线、上下文结构、历史增长、错误类型）；模型的选择（调用了哪些工具、结论内容）只报告，不断言。
+- 区分失败来源：接线或断言失败与模型侧失败（网络、密钥、限流、输出格式、超出轮次）使用不同退出码，并在输出中说明。
+- 不得在输出中打印密钥或完整请求上下文。
 
 ## 9. 变更检查清单
 

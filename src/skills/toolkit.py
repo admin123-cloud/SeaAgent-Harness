@@ -1,5 +1,5 @@
-from skills.skill_manager import LOAD_REF_PREFIX, check_skill_id
-from skills.skill_manager import SkillRegistry
+from skills.registry import LOAD_REF_PREFIX, SkillRegistry
+from skills.store import check_skill_id
 from skills.models import SkillSummary, SkillDetail
 from model.errors import SkillInvalid, SkillNotFound
 

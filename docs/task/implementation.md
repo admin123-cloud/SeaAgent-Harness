@@ -52,8 +52,7 @@
 | SDD-010 | OODA 外层循环与 ReAct 内层执行 | SDD-005、SDD-006、SDD-007、SDD-008、SDD-009 | `TODO` | 有界循环执行工具，达到后置条件才结束 |
 | SDD-011 | 持续积累、评估、定位和纠偏 | SDD-010 | `TODO` | 反馈进入知识、Skill、提示词和回归评估 |
 | SDD-012 | 高级 Skill/Tool 管理页面 | SDD-005、SDD-006 | `IN_PROGRESS` | 页面支持 Skill ZIP 导入与 Skill/Tool 元数据 CRUD、启停；变更审计并作用于后续请求 |
-| SDD-013 | Skill/Tool 注册结构收敛 | SDD-005 | `IN_PROGRESS` | 依赖方向满足上面三条规则;重构前后 verify_runtime 的行为一致; 只有一个接线点。|
-
+| SDD-013 | Skill/Tool 注册结构收敛 | SDD-005 | `IN_PROGRESS` | 包依赖单向且只有一个接线点；阶段一搬家前后 `verify_runtime` 行为一致；阶段二统一两个 Registry 的接口并消除 `SkillToolkit` |
 ## 5. 当前任务明细
 
 ### SDD-001 建立 SDD 规范文档体系
@@ -133,17 +132,61 @@
 - 遗留：SDD-005-E 调用摘要日志（`LLMCallSummary`）未实现；超时/重试/错误归一化路径未系统验收；`verify_runtime.py` 缺可重复断言；`DecisionResponse.evidence_ids` 语义需收紧（真模型曾把工具 call_id 填入证据引用）。
 - 后续：依次完成配置/错误模型、一个 OpenAI-compatible 提供方、超时与有界重试、调用摘要日志；阶段性验收再验证真实模型调用、输出 schema 和错误处理。
 
-### SDD-013
+### SDD-013 Skill/Tool 注册结构收敛
+
 - 状态：`IN_PROGRESS`
-- 目标：定义模型供应商无关的结构化请求/响应，并通过 Adapter 隔离具体 HTTP/SDK 调用。
-- 子任务与命名：
-- 名称：Skill/Tool 注册结构收敛。
-- 依赖：SDD-005（模型调用已完成）。
-- 验收摘要：
-  依赖方向满足上面三条规则；
-  重构前后 verify_runtime 的行为一致；
-  只有一个接线点。
-- 明细里写清：阶段一只搬家不改逻辑，阶段二改逻辑，哪些步骤对应哪些文件。
+- 背景：Skill 与 Tool 的注册、读取、描述逻辑分散在 `agent/`、`tools/`、`skills/` 和入口脚本中：
+  - `ToolRegistry` 位于 `agent/`，导致 `tools` 反向依赖 `agent`；
+  - `read_skill` 的注册写在 `tools/default_tools.py`，导致 `tools` 依赖 `skills`；
+  - `AgentRuntime` 自行拼装 `available_tools` 与 `available_skills`；
+  - `web_app.py` 与 `verify_runtime.py` 各写一份相同的接线代码；
+  - `SkillToolkit` 与 `SkillRegistry.summaries()` 各实现了一遍“enabled 且 valid 才对模型可见”。
+- 目标：Tool 与 Skill 各自的注册、读取、描述逻辑收敛在 `src/tools/`、`src/skills/` 内；包之间依赖单向；只保留一个接线点（`src/bootstrap.py`）；两个 Registry 向 Runtime 暴露一致的接口。
+- 非目标：不新增或修改任何工具的业务行为（k8s/Jenkins 工具属 SDD-002/007）；不实现 `SkillAdminService` 与管理页面（属 SDD-012）；不改变模型可见的工具名、skill_id 与提示词。
+- 依赖：SDD-005。
+- 依赖方向规则（每个步骤完成后都必须成立，同时登记为 CLAUDE.md §6 的长期规则）：
+  1. `tools` 不依赖 `agent`、`skills`；
+  2. `skills` 只依赖 `tools` 的公开接口（如 `ToolSpec`）和 `model`；
+  3. `agent` 不依赖 `bootstrap`；只有 `bootstrap` 可以依赖所有包。
+- 约束：阶段一只搬家，不改变任何函数的行为；阶段二才修改逻辑，且必须先完成 2.0 安全网。
+
+#### 步骤
+
+| 步骤 | 阶段 | 内容 | 涉及文件 | 状态 |
+| --- | --- | --- | --- | --- |
+| 1.1 | 结构 | `ToolRegistry`/`ToolSpec` 迁入 `tools/`；`ToolNotFoundError` 迁入独立的 `tool_errors.py` | `tools/registry.py`、`model/errors/tool_errors.py`、`agent/runtime.py`、`agent/__init__.py`、`tools/default_tools.py` | `VERIFYING` |
+| 1.2 | 结构 | 拆分 `skill_manager.py`：磁盘存储与内存注册表分开 | `skills/store.py`、`skills/registry.py`、`skills/toolkit.py`、`skills/__init__.py` | `TODO` |
+| 1.3 | 结构 | 新建唯一接线点；`read_skill` 的 ToolSpec 迁入 `skills/`；删除 `default_tools.py`；`tools/__init__.py` 只导出 registry 相关符号 | `bootstrap.py`、`skills/tool.py`、`tools/__init__.py`、`web_app.py`、`scripts/verify_runtime.py` | `TODO` |
+| 1.4 | 结构 | 同步打包配置与文档 | `pyproject.toml`、`CLAUDE.md` §4/§6/§8/§9、`README.md` | `TODO` |
+| 2.0 | 逻辑 | 重写 `verify_runtime.py`：A 层确定性接线检查 + B 层真实模型冒烟（录制代理）；退出码区分接线失败与模型侧失败；关闭适配器 | `scripts/verify_runtime.py` | `TODO` |
+| 2.1 | 逻辑 | `SkillToolkit` 并入 `SkillRegistry`，“模型可见”规则只保留一份 | `skills/registry.py`、`skills/toolkit.py`（删除） | `TODO` |
+| 2.2 | 逻辑 | 两个 Registry 各提供 `describe_for_model()`；`AgentRuntime` 签名改为 `(llm, tools, skills)` | `tools/registry.py`、`skills/registry.py`、`agent/runtime.py`、`bootstrap.py` | `TODO` |
+| 2.3 | 逻辑 | 启动时校验 skill 的 `allowed_tools` 均已注册（先告警，不过滤）；工具异常信息脱敏后再进入 `summary` | `bootstrap.py`、`tools/registry.py` | `TODO` |
+
+#### 验收标准
+
+- [ ] 依赖方向检查无输出（PowerShell，仓库根目录）：
+  - `Select-String -Path src\tools\*.py -Pattern "^\s*(from|import)\s+(agent|skills)"`
+  - `Select-String -Path src\skills\*.py -Pattern "^\s*(from|import)\s+(agent|bootstrap|database|config|web_app)"`
+  - `Select-String -Path src\agent\*.py -Pattern "^\s*(from|import)\s+bootstrap"`
+- [ ] 全包导入检查通过：`python -c "import agent, tools, skills, web_app; print('imports ok')"`
+- [ ] `python -m scripts.verify_runtime` 前后行为一致：真实模型完成 `demo_echo` 与 `read_skill` 调用并返回 `FinalDecision`。
+- [ ] 1.3 之后 `web_app.py`、`verify_runtime.py` 中不再出现 `SkillRegistry(`、`FileSkillStore(`。
+- [ ] 全仓库搜索 `skill_manager`、`tool_registry`、`default_tools` 无残留引用。
+- [ ] 2.0 的两个反向验证（破坏接线后脚本按预期失败）已执行并记录。
+
+#### 验证记录
+
+| 日期 | 步骤 | 命令 | 结果摘要 | 未验证项 |
+| --- | --- | --- | --- | --- |
+| 2026-10-28 | 1.1 | 全包导入检查 | 【待填：粘贴实际输出】 | — |
+| 2026-10-28 | 1.1 | `python -m scripts.verify_runtime` | 【待填：是否完成两轮工具调用、是否返回 FinalDecision】 | 无自动化断言，仅人工核对输出 |
+
+#### 遗留风险
+
+- 1.3 的三处改动（新建 `bootstrap.py`、新建 `skills/tool.py`、`tools/__init__.py` 不再导入 `default_tools`）必须在同一步完成，否则 `skills ↔ tools` 会出现循环导入。
+- 阶段一没有自动化断言，行为回归只靠导入检查和真实模型冒烟，证据较弱，因此 2.0 之前不修改任何逻辑。
+- `incident-triage`、`pod-diagnosis`、`build-failure-triage` 三个 Skill 引用的 `k8s_*`/`jenkins_*` 工具尚未注册，由 2.3 先告警、待工具落地后再改为过滤。
 
 ## 6. 五阶段执行计划
 
@@ -223,12 +266,19 @@
 
 ## 7. 近期执行顺序
 
-1. `verify_runtime.py` 补齐可重复断言（结果为 `FinalDecision`、事件成对且 round 递增、工具结果 success 全真、`read_skill` 返回含 skill_id/instructions），并定案 FakeLLM 确定性回归与真模型冒烟的脚本分工。
-2. 收紧 `DecisionResponse.evidence_ids` 字段描述：只允许引用 Incident Evidence ID，不允许工具 call_id。
-3. 实现 SDD-005-E `LLMCallSummary` 调用摘要日志，并完成超时/重试/错误路径验收。
-4. 执行阶段一阶段验收（结构化 Incident 输入 → 可解析决策；调用失败可定位且不泄露凭据），随后关闭 SDD-003/004/005。
-5. 阶段一退出后按优先级进入 SDD-006 MCP Client 或 SDD-012 管理层；SDD-002 恢复 MCP 形态还是改走直接工具注册，届时重新裁定（候选清单见 `src/tools/catalog.py`）。
-
+1. **SDD-013 阶段一：结构整理（行为不变）**
+   1. 1.2 拆分 `skills/skill_manager.py` 为 `skills/store.py` 与 `skills/registry.py`；更新 `skills/toolkit.py`、`skills/__init__.py`。完成标准：`ruff check src/skills --select F` 无未使用导入或未定义名字；导入检查与 `verify_runtime` 通过。
+   2. 1.3 新建 `src/bootstrap.py` 与 `src/skills/tool.py`；删除 `src/tools/default_tools.py`；`web_app.py`、`verify_runtime.py` 改调 `bootstrap`。完成标准：三条依赖方向检查无输出；两个入口不再直接构造 `SkillRegistry`/`FileSkillStore`。
+   3. 1.4 `pyproject.toml` 的 `only-include` 补充 `src/skills`、`src/bootstrap.py`；同步 CLAUDE.md §4/§6/§8/§9；README 的能力列表改为与 SDD-002 `BLOCKED` 的现状一致。完成标准：文档中的目录与实际目录逐项一致。
+2. **SDD-013 阶段二：逻辑整理**
+   1. 2.0 重写 `src/scripts/verify_runtime.py`，**取代原第 1 条**（可重复断言）：A 层断言确定性行为（目录非空、`demo_echo`/`read_skill` 成功、三类错误的 `error_type`）；B 层用录制代理包住真实模型，只断言 Runtime 自己保证的事（首次请求的上下文结构、`agent_history` 每轮增加 2 条、事件成对），模型的选择只报告。FakeLLM 删除，不再保留。完成标准：两个反向验证按预期失败。
+   2. 2.1 `SkillToolkit` 并入 `SkillRegistry`，删除 `toolkit.py`。
+   3. 2.2 `describe_for_model()` 与 `AgentRuntime(llm, tools, skills)`。
+   4. 2.3 `allowed_tools` 启动校验与异常信息脱敏。
+3. **SDD-005 收尾：收紧 `DecisionResponse.evidence_ids` 的语义**：修改 `model/response/decision_response.py` 的字段描述及 `openai_compatible_llm_adapter.py` 的系统提示，明确只能引用 Incident Evidence ID，不得填工具 `call_id`。完成标准：真实模型回归运行，`evidence_ids` 中不再出现 `call_id`。
+4. **SDD-005-E**：实现 `LLMCallSummary` 调用摘要日志（耗时、结果类型、错误类型，不含密钥和完整上下文），并验收超时、重试、错误归一化路径。
+5. **阶段一阶段验收**：结构化 Incident 输入 → 可解析决策；调用失败可定位且不泄露凭据；随后关闭 SDD-003/004/005/013。
+6. 阶段一退出后，按优先级进入 SDD-006 或 SDD-012；SDD-002 恢复 MCP 形态还是改走直接工具注册，届时重新裁定（候选清单见 `src/tools/catalog.py`）。
 ## 8. 变更记录
 
 | 日期 | 任务 | 变更 | 验证/备注 |
@@ -248,7 +298,7 @@
 | 2026-10-23 | Skill 体系骨架 | 实现 FileSkillStore/SkillRegistry/SkillToolkit、skill 错误模型；`read_skill` 注册进默认工具表；AgentRuntime 增加 `skill_toolkit` 与 `available_skills` 注入 | 未做系统性验收 |
 | 2026-10-27 | SDD-002 暂缓 | 用户裁定 MCP 接入暂缓，原 MCP Server 代码已不在仓库；保留工具候选清单 | 状态转 `BLOCKED`，解除条件见任务明细 |
 | 2026-10-27 | SDD-005 真模型验证 | `verify_runtime.py` 以真实 OpenAI-compatible 模型完成最小调用：demo_echo + read_skill 两轮工具调用，`DecisionResponse` 校验通过 | 需补可重复断言；evidence_ids 契约待收紧 |
-
+| 2026-10-28 | SDD-013 启动 / 步骤 1.1 | 登记任务；`ToolRegistry`/`ToolSpec` 从 `agent/tool_registry.py` 迁至 `tools/registry.py`；`ToolNotFoundError` 迁至 `model/errors/tool_errors.py`；Runtime 与 `default_tools.py` 的导入同步修改 | 只移动和改导入，未改逻辑；验证记录见 SDD-013 |
 ## 9. 阻塞与风险
 
 | 项目 | 影响 | 解除条件 | 状态 |
