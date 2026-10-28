@@ -1,6 +1,6 @@
 from skills.registry import LOAD_REF_PREFIX, SkillRegistry
 from skills.store import check_skill_id
-from skills.models import SkillSummary, SkillDetail
+from .models import SkillSummary, SkillDetail
 from model.errors import SkillInvalid, SkillNotFound
 
 # BaseModel 是给数据类用的  特征是"字段 + 校验 + 序列化"

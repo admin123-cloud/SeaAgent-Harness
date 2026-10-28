@@ -155,7 +155,7 @@
 | 步骤 | 阶段 | 内容 | 涉及文件 | 状态 |
 | --- | --- | --- | --- | --- |
 | 1.1 | 结构 | `ToolRegistry`/`ToolSpec` 迁入 `tools/`；`ToolNotFoundError` 迁入独立的 `tool_errors.py` | `tools/registry.py`、`model/errors/tool_errors.py`、`agent/runtime.py`、`agent/__init__.py`、`tools/default_tools.py` | `VERIFYING` |
-| 1.2 | 结构 | 拆分 `skill_manager.py`：磁盘存储与内存注册表分开 | `skills/store.py`、`skills/registry.py`、`skills/toolkit.py`、`skills/__init__.py` | `TODO` |
+| 1.2 | 结构 | 拆分 `skill_manager.py`：磁盘存储与内存注册表分开 | `skills/store.py`、`skills/registry.py`、`skills/toolkit.py`、`skills/__init__.py` | `VERIFYING` |
 | 1.3 | 结构 | 新建唯一接线点；`read_skill` 的 ToolSpec 迁入 `skills/`；删除 `default_tools.py`；`tools/__init__.py` 只导出 registry 相关符号 | `bootstrap.py`、`skills/tool.py`、`tools/__init__.py`、`web_app.py`、`scripts/verify_runtime.py` | `TODO` |
 | 1.4 | 结构 | 同步打包配置与文档 | `pyproject.toml`、`CLAUDE.md` §4/§6/§8/§9、`README.md` | `TODO` |
 | 2.0 | 逻辑 | 重写 `verify_runtime.py`：A 层确定性接线检查 + B 层真实模型冒烟（录制代理）；退出码区分接线失败与模型侧失败；关闭适配器 | `scripts/verify_runtime.py` | `TODO` |

@@ -1,5 +1,4 @@
-"""skill_manager.py —— Skill 管理（v2）
-
+"""
 分层：
   第 1 层   加载与注册    FileSkillStore（SKILL.md/meta.json 的解析、渲染与原子写入，不含内存索引或可见性规则）、SkillRegistry（内存索引）
   第 1.5 层 导入         SkillImporter（zip -> 校验 -> 规范化 -> 安装），"宽进严出"：加载器只认内部标准格式
