@@ -52,6 +52,7 @@
 | SDD-010 | OODA 外层循环与 ReAct 内层执行 | SDD-005、SDD-006、SDD-007、SDD-008、SDD-009 | `TODO` | 有界循环执行工具，达到后置条件才结束 |
 | SDD-011 | 持续积累、评估、定位和纠偏 | SDD-010 | `TODO` | 反馈进入知识、Skill、提示词和回归评估 |
 | SDD-012 | 高级 Skill/Tool 管理页面 | SDD-005、SDD-006 | `IN_PROGRESS` | 页面支持 Skill ZIP 导入与 Skill/Tool 元数据 CRUD、启停；变更审计并作用于后续请求 |
+| SDD-013 | Skill/Tool 注册结构收敛 | SDD-005 | `IN_PROGRESS` | 依赖方向满足上面三条规则;重构前后 verify_runtime 的行为一致; 只有一个接线点。|
 
 ## 5. 当前任务明细
 
@@ -131,6 +132,18 @@
 - 当前步骤：SDD-005-A/B（决策契约与 Adapter 接口）、SDD-005-C（`LLMSettings` 与 `llm_errors` 错误模型）、SDD-005-D（OpenAI-compatible 实现）已完成。2026-10-27 通过 `src/scripts/verify_runtime.py` 完成真模型最小调用验证：模型经 `available_tools`/`available_skills` 注入后主动调用 `demo_echo` 与 `read_skill`（`skill://sre/incident-triage`），两轮工具调用成功，最终结论通过 `DecisionResponse` 校验。请求由调用方提供已脱敏的 Incident 上下文；响应只表达计划、诊断结论、证据引用和建议，不携带可直接执行的工具调用。
 - 遗留：SDD-005-E 调用摘要日志（`LLMCallSummary`）未实现；超时/重试/错误归一化路径未系统验收；`verify_runtime.py` 缺可重复断言；`DecisionResponse.evidence_ids` 语义需收紧（真模型曾把工具 call_id 填入证据引用）。
 - 后续：依次完成配置/错误模型、一个 OpenAI-compatible 提供方、超时与有界重试、调用摘要日志；阶段性验收再验证真实模型调用、输出 schema 和错误处理。
+
+### SDD-013
+- 状态：`IN_PROGRESS`
+- 目标：定义模型供应商无关的结构化请求/响应，并通过 Adapter 隔离具体 HTTP/SDK 调用。
+- 子任务与命名：
+- 名称：Skill/Tool 注册结构收敛。
+- 依赖：SDD-005（模型调用已完成）。
+- 验收摘要：
+  依赖方向满足上面三条规则；
+  重构前后 verify_runtime 的行为一致；
+  只有一个接线点。
+- 明细里写清：阶段一只搬家不改逻辑，阶段二改逻辑，哪些步骤对应哪些文件。
 
 ## 6. 五阶段执行计划
 

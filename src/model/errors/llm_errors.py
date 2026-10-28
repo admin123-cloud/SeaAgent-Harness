@@ -1,6 +1,3 @@
-class ToolNotFoundError(Exception):
-    """工具不存在。"""
-
 class LLMError(Exception):
     """模型调用错误基类。"""
 

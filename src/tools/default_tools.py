@@ -1,4 +1,4 @@
-from agent.tool_registry import ToolRegistry, ToolSpec
+from tools.registry import ToolRegistry, ToolSpec
 from tools.demo_echo import DemoEchoInput, run_demo_echo
 from pydantic import BaseModel, Field
 from skills import SkillToolkit

@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
-from agent import LLMAdapter
-from agent import ToolRegistry
+from agent.llm_adapter import LLMAdapter
+from tools.registry import ToolRegistry
 from model.enums import PermissionMode
 from model.models import FinalDecision, ToolCallDecision, ToolResult
 from model.request import DecisionRequest

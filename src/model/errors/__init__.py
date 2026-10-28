@@ -7,7 +7,6 @@ from .skill_errors import (
 )
 
 from .llm_errors import (
-    ToolNotFoundError,
     LLMError,
     LLMTimeoutError,
     LLMAuthenticationError,
@@ -15,5 +14,7 @@ from .llm_errors import (
     LLMProviderError,
     LLMOutputError
 )
+
+from .tool_errors import ToolNotFoundError
 
 from .agent_errors import AgentRuntimeError
