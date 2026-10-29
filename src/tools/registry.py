@@ -22,7 +22,7 @@ ToolHandler = Callable[
 @dataclass(frozen=True)
 class ToolSpec:
     """工具元数据与执行入口。"""
-    # 工具注册名，例如 demo_echo
+    # 工具注册名，例如 read_skill
     name: str
     # 提供给模型看的工具说明
     description: str

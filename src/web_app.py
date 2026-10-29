@@ -29,8 +29,7 @@ from model.models import Incident
 from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from database import IncidentRepository, SQLiteDatabase
-from tools import build_default_registry
-from skills import SkillRegistry,FileSkillStore,SkillToolkit
+from bootstrap import build_deps
 
 _HTML = r'''<!doctype html>
 <html lang="zh-CN">
@@ -70,13 +69,9 @@ class SREWebApp:
         self.repository.initialize()
         self.lock = threading.Lock()
 
-        src_dir = Path(__file__).parent
-        skill_registry = SkillRegistry(
-            builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
-            team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
-        )
-        self.toolkit = SkillToolkit(skill_registry)
-        self.registry = build_default_registry(self.toolkit)
+        deps = build_deps()
+        self.toolkit = deps.skill_toolkit
+        self.registry = deps.tool_registry
 
     @staticmethod
     def _public_incident(incident: Incident) -> dict[str, object]:

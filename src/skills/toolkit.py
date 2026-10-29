@@ -3,10 +3,11 @@ from skills.store import check_skill_id
 from .models import SkillSummary, SkillDetail
 from model.errors import SkillInvalid, SkillNotFound
 
-# BaseModel 是给数据类用的  特征是"字段 + 校验 + 序列化"
-# Toolkit 是服务（有行为、无数据 schema）  最终喂给大模型的可用工具类
-
 class SkillToolkit:
+    """ SkillRegistry 之上的一层薄封装  只给模型用 只暴露两件事：
+        : catalog()：给出目录
+        : read_skill(load_ref)：解析 skill://xxx，检查"enabled 且 valid"，返回正文。
+    """
     def __init__(self, registry:SkillRegistry) -> None:
         self._registry = registry
 
