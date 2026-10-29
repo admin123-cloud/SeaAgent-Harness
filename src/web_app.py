@@ -248,12 +248,23 @@ class SREWebApp:
         return self.get_incident(incident_id)
 
     async def run_agent(self,request:DecisionRequest,) -> FinalDecision:
+        #  src目录和root目录 找到skill
+        src_dir = Path(__file__).resolve().parents[1]
+        # 内置skill和上传的skill
+        skill_registry = SkillRegistry(
+            builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
+            team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
+        )
         settings = LLMSettings()
         adapter = OpenAICompatibleLLMAdapter(settings)
+        toolkit = SkillToolkit(skill_registry)
+
+        # tool_registry = build_default_registry(toolkit)
         try:
             runtime = AgentRuntime(
                 llm=adapter,
                 registry=self.registry,
+                skill_toolkit=toolkit,
                 max_rounds=5,
                 event_sink= lambda event_type, data: (
                     self.record_runtime_event(

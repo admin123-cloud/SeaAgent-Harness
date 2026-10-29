@@ -97,6 +97,8 @@ async def main():
             context={},
         )
         result = await runtime.run(request)
+        print(result.response.summary)
+        print([t for t, _ in events])
     except AssertionError as e:
         raise e
 
