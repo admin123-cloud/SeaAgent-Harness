@@ -18,7 +18,7 @@ class AgentRuntime:
             self,
             llm: LLMAdapter,
             # tool注册
-            registry: ToolRegistry,
+            tool_registry: ToolRegistry,
             # skill注册
             skill_toolkit: SkillToolkit,
 
@@ -30,7 +30,7 @@ class AgentRuntime:
         if max_rounds < 1:
             raise ValueError("max_rounds 必须大于 0")
         self.llm = llm
-        self.registry = registry
+        self.registry = tool_registry
         self.skill_toolkit = skill_toolkit
         self.max_rounds = max_rounds
         self.event_sink  = event_sink

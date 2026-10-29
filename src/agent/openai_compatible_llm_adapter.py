@@ -53,8 +53,8 @@ class OpenAICompatibleLLMAdapter:
                             "格式一：需要调用工具时：\n"
                             '{"kind":"tool_call","tool_calls":['
                             '{"call_id":"call-001",'
-                            '"tool_name":"demo_echo",'
-                            '"arguments":{"message":"hello"}}'
+                            '"tool_name":"read_skill",'
+                            '"arguments":{"load_ref":"skill://<skill_id>"}}'
                             "]}\n\n"
 
                             "格式二：可以直接给出结论时：\n"
