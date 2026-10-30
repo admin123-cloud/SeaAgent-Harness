@@ -14,7 +14,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
-
+from .bootstrap import AgentDeps
 from pydantic import ValidationError
 from agent import AgentRuntime
 from agent.openai_compatible_llm_adapter import OpenAICompatibleLLMAdapter
@@ -68,9 +68,7 @@ class SREWebApp:
         self.repository.initialize()
         self.lock = threading.Lock()
 
-        deps = build_deps()
-        self.toolkit = deps.skill_toolkit
-        self.registry = deps.tool_registry
+        self.deps = build_deps()
 
     @staticmethod
     def _public_incident(incident: Incident) -> dict[str, object]:
@@ -247,7 +245,7 @@ class SREWebApp:
         adapter = OpenAICompatibleLLMAdapter(settings)
 
         # 2.构建模型依赖参数
-        agent_deps = build_deps()
+        agent_deps = self.deps
 
         try:
             runtime = AgentRuntime(

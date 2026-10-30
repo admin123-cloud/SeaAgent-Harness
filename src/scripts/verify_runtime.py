@@ -91,8 +91,8 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
         # B3.第 n≥2 次请求里   顺序和轮次正确，这一条能暴露"结果没带回去"的 bug
         if n >= 2:
             expect(history[-2]["kind"] == "tool_call", f"第{n}次请求：倒数第二条应是 tool_call，实际是 {history[-2]['kind']}")
-            expect(history[-1]["kind"] == "tool_result", f"第{n}次请求：倒数第一条应是 tool_result，实际是 {history[-2]['kind']}")
-            expect(history[-1]["round"] == n - 1, "轮数异常")
+            expect(history[-1]["kind"] == "tool_result", f"第{n}次请求：倒数第一条应是 tool_result，实际是 {history[-1]['kind']}")
+            expect(history[-1]["round"] == n - 1, f"第{n}次请求：最后一条的 round 应为 {n-1}，实际是 {history[-1]['round']}")
 
     # B4._prepare_request 注入正确
     first = llm.requests[0].context
@@ -109,24 +109,25 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
     seen_tools: dict[str,str] = {}
-    for i, d in enumerate(llm.decisions):  # i 从 0 开始，显示时 +1
+    for i, d in enumerate(llm.decisions,start=1):  # i 从 0 开始，显示时 +1
         if isinstance(d, ToolCallDecision):
             tool_calls = d.tool_calls
             for tool_call in tool_calls:
                 tool_name = tool_call.tool_name
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
-                if tool_name not in seen_tools.keys():
-                    seen_tools[tool_name] = load_ref
-                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i]}")
+                key = tool_name + "_" + load_ref
+                if key not in seen_tools.keys():
+                    seen_tools[key] = load_ref
+                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s")
         else:# FinalDecision
             print(f"当前是第{i}轮. 耗时{llm.elapsed[i]}")
 
     if len(llm.requests) > len(llm.decisions):  # 录到了请求，却没有对应决策
-        print(f"第 N 轮模型调用失败（原因见上方 [FAIL][模型侧]）")
+        print(f"第 {len(llm.requests)} 轮模型调用失败...")
 
     if result is not None:
-        print(f"{result.response.summary}")
+        print(f"{result.response.summary[:200]}")
 
 async def main() -> int:
     offline = "--offline" in sys.argv
