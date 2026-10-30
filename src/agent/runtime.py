@@ -70,13 +70,8 @@ class AgentRuntime:
             update={"context": context}
         )
 
-    def _append_tool_round(
-            self,
-            request: DecisionRequest,
-            round_number: int,
-            decision: ToolCallDecision,
-            results: list[ToolResult],
-    ) -> DecisionRequest:
+    def _append_tool_round(self,request: DecisionRequest,round_number: int,decision: ToolCallDecision,
+                           results: list[ToolResult]) -> DecisionRequest:
         context = dict(request.context)
         history = list(context.get("agent_history", []))
 
@@ -105,6 +100,7 @@ class AgentRuntime:
         )
 
     async def run(self,request: DecisionRequest,) -> FinalDecision:
+        # R1.调用模型前准备参数
         current_request = self._prepare_request(request)
 
         for round_number in range(1,self.max_rounds+1):
@@ -116,9 +112,8 @@ class AgentRuntime:
             if not isinstance(decision, ToolCallDecision):
                 raise AgentRuntimeError(f"不支持的决策类型{type(decision).__name__}")
 
-
+            # R2 调用工具逻辑 & 工具调用前
             results: list[ToolResult] = []
-            # 工具调用前  生成触发事件类型 ToolCalling
             self._emit(
                 "tool_call",
                 {
@@ -127,6 +122,7 @@ class AgentRuntime:
                     "tool_calls": decision.model_dump(mode="json")["tool_calls"],
                 },
             )
+            # R3.工具调用
             for tool_call in decision.tool_calls:
                 result = await self.registry.execute(tool_call)
                 results.append(result)

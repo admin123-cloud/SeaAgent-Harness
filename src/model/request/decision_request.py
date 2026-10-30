@@ -1,11 +1,9 @@
 from pydantic import BaseModel,Field
-
 from model.enums.decision_task import DecisionTask
-
-""" 决策契约请求体 """
 
 
 class DecisionRequest(BaseModel):
+    """ 决策契约请求体 """
     # 决策类型 枚举
     task: DecisionTask
     # 事件id

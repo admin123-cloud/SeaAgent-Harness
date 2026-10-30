@@ -17,11 +17,11 @@ def build_deps() -> AgentDeps:
 
     # 2.构建SkillRegistry skill注册器
     skill_registry = SkillRegistry(
-        builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
+        builtin=FileSkillStore(src_dir / "skills" / "builtin", source="builtin", read_only=True),
         team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
     )
     skill_toolkit = SkillToolkit(skill_registry)
     tool_registry = ToolRegistry()
-    tool_registry.register(build_read_skill_spec(skill_toolkit))
+    #tool_registry.register(build_read_skill_spec(skill_toolkit))
 
     return AgentDeps(tool_registry, skill_toolkit)

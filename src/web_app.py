@@ -10,7 +10,6 @@ import asyncio
 import json
 import os
 import threading
-from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
@@ -243,23 +242,18 @@ class SREWebApp:
         return self.get_incident(incident_id)
 
     async def run_agent(self,request:DecisionRequest,) -> FinalDecision:
-        #  src目录和root目录 找到skill
-        src_dir = Path(__file__).resolve().parents[1]
-        # 内置skill和上传的skill
-        skill_registry = SkillRegistry(
-            builtin=FileSkillStore(src_dir / "skills", source="builtin", read_only=True),
-            team=FileSkillStore(src_dir.parent / ".sre-agent-data" / "skills"),
-        )
+        # 1.确认模型适配器
         settings = LLMSettings()
         adapter = OpenAICompatibleLLMAdapter(settings)
-        toolkit = SkillToolkit(skill_registry)
 
-        # tool_registry = build_default_registry(toolkit)
+        # 2.构建模型依赖参数
+        agent_deps = build_deps()
+
         try:
             runtime = AgentRuntime(
                 llm=adapter,
-                registry=self.registry,
-                skill_toolkit=toolkit,
+                tool_registry=agent_deps.tool_registry,
+                skill_toolkit=agent_deps.skill_toolkit,
                 max_rounds=5,
                 event_sink= lambda event_type, data: (
                     self.record_runtime_event(
