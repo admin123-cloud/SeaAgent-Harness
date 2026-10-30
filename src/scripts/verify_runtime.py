@@ -108,11 +108,13 @@ def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision 
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
                 key = (tool_name, load_ref)
-                if key not in seen_tools:
+                if key in seen_tools:
+                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s , ⚠ 重复读取")
+                else:
                     seen_tools.append(key)
                     print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s")
         else:# FinalDecision
-            print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]}")
+            print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]:.1f}s")
 
     if len(llm.requests) > len(llm.decisions):  # 录到了请求，却没有对应决策
         print(f"第 {len(llm.requests)} 轮模型调用失败...")

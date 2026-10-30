@@ -27,7 +27,7 @@ from model.models import Incident
 from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from database import IncidentRepository, SQLiteDatabase
-from bootstrap import build_deps,AgentDeps
+from bootstrap import build_deps
 
 _HTML = r'''<!doctype html>
 <html lang="zh-CN">
