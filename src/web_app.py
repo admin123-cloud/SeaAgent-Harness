@@ -14,7 +14,6 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
-from .bootstrap import AgentDeps
 from pydantic import ValidationError
 from agent import AgentRuntime
 from agent.openai_compatible_llm_adapter import OpenAICompatibleLLMAdapter
@@ -28,7 +27,7 @@ from model.models import Incident
 from model.request import DecisionRequest
 from model.response.decision_response import DecisionResponse
 from database import IncidentRepository, SQLiteDatabase
-from bootstrap import build_deps
+from bootstrap import build_deps,AgentDeps
 
 _HTML = r'''<!doctype html>
 <html lang="zh-CN">

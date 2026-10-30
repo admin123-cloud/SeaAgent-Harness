@@ -9,15 +9,6 @@ from model.models import FinalDecision,ToolCall,ToolCallDecision
 from config import LLMSettings
 from time import perf_counter
 
-# 1. import 与常量
-# 2. expect() 断言辅助
-# 3. RecordingLLM 类
-# 4. check_wiring(deps)        —— A 层，不联网
-# 5. check_history(llm, events) —— B 层断言
-# 6. report(llm, events)        —— B 层报告（只打印，不断言）
-# 7. async main() -> int
-# 8. if __name__: sys.exit(asyncio.run(main()))
-
 
 
 EXIT_OK, EXIT_WIRING, EXIT_MODEL = 0, 1, 2
@@ -108,20 +99,20 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
 
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
-    seen_tools: dict[str,str] = {}
-    for i, d in enumerate(llm.decisions,start=1):  # i 从 0 开始，显示时 +1
+    seen_tools: list[tuple[str,str]]  = []
+    for i, d in enumerate(llm.decisions,start=1):
         if isinstance(d, ToolCallDecision):
             tool_calls = d.tool_calls
             for tool_call in tool_calls:
                 tool_name = tool_call.tool_name
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
-                key = tool_name + "_" + load_ref
-                if key not in seen_tools.keys():
-                    seen_tools[key] = load_ref
+                key = (tool_name, load_ref)
+                if key not in seen_tools:
+                    seen_tools.append(key)
                     print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s")
         else:# FinalDecision
-            print(f"当前是第{i}轮. 耗时{llm.elapsed[i]}")
+            print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]}")
 
     if len(llm.requests) > len(llm.decisions):  # 录到了请求，却没有对应决策
         print(f"第 {len(llm.requests)} 轮模型调用失败...")
