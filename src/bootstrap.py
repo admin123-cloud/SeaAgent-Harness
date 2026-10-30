@@ -22,6 +22,6 @@ def build_deps() -> AgentDeps:
     )
     skill_toolkit = SkillToolkit(skill_registry)
     tool_registry = ToolRegistry()
-    #tool_registry.register(build_read_skill_spec(skill_toolkit))
+    tool_registry.register(build_read_skill_spec(skill_toolkit))
 
     return AgentDeps(tool_registry, skill_toolkit)
