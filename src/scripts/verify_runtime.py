@@ -4,7 +4,7 @@ from bootstrap import build_deps
 from agent import AgentRuntime,OpenAICompatibleLLMAdapter
 from model.enums import DecisionTask
 from model.request import DecisionRequest
-from model.errors import LLMError, AgentRuntimeError
+from model.errors import LLMError, AgentRuntimeError,LLMOutputError
 from model.models import FinalDecision,ToolCall,ToolCallDecision
 from config import LLMSettings
 from time import perf_counter
@@ -155,6 +155,8 @@ async def main() -> int:
         result = await runtime.run(request)
     except (LLMError, AgentRuntimeError) as e:
         print(f"[FAIL][模型侧] {type(e).__name__}: {e}")  # 退出码 2，不是接线问题
+        print(f"  错误摘要：{e.error_summary}")
+        print(f"  原始输出前300字：{e.raw_preview!r}")
         exit_code = EXIT_MODEL
     finally:
         await adapter.aclose()

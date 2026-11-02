@@ -60,11 +60,12 @@ class OpenAICompatibleLLMAdapter:
                             "格式二：可以直接给出结论时：\n"
                             '{"kind":"final","response":{'
                             '"summary":"诊断结论",'
-                            '"findings":[],'
+                            '"findings":["发现1","发现2"],'
                             '"evidence_ids":[],'
                             '"confidence":0.9,'
-                            '"recommendations":[]'
-                            "}}\n\n"
+                            '"recommendations":["建议1"]'
+                            "}}\n"
+                            "findings、recommendations、evidence_ids 的每个元素都必须是字符串，不要使用对象。\n\n"
 
                             "上下文中的 available_skills 是可用的 Skill 手册目录。\n"
                             "agent_history 是已经执行过的工具调用及其结果；已经在其中出现过的 skill 不要重复加载，直接按其指引给出 final\n"
@@ -101,7 +102,15 @@ class OpenAICompatibleLLMAdapter:
         try:
             return _AGENT_DECISION_ADAPTER.validate_json(content)
         except ValidationError  as exc:
-            raise LLMOutputError("模型响应不符合 AgentDecision  格式") from exc
+            summary = [
+                f"{'.'.join(str(p) for p in e['loc']) or '<root>'}:{e['type']}"
+                for e in exc.errors()[:5]
+            ]
+            raise LLMOutputError(
+                "模型响应不符合 AgentDecision  格式",
+                raw_preview=content[:300],
+                error_summary=summary,
+            ) from exc
 
 
     async def aclose(self) -> None:
