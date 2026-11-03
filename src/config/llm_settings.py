@@ -1,6 +1,11 @@
 from pydantic_settings import BaseSettings,SettingsConfigDict
 from pydantic import AnyHttpUrl,SecretStr,Field
 
+
+def load_llm_settings() -> LLMSettings:
+    # 字段由 pydantic-settings 从环境变量 / .env 读取，类型检查器看不到
+    return LLMSettings()  # pyright: ignore[reportCallIssue]
+
 class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix = 'LLM_',

@@ -250,7 +250,7 @@ class SREWebApp:
             runtime = AgentRuntime(
                 llm=adapter,
                 tool_registry=agent_deps.tool_registry,
-                skill_toolkit=agent_deps.skill_toolkit,
+                skill_registry=agent_deps.skill_registry,
                 max_rounds=5,
                 event_sink= lambda event_type, data: (
                     self.record_runtime_event(

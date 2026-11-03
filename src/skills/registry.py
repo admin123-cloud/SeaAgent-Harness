@@ -4,8 +4,8 @@ import json
 import threading
 import hashlib
 from datetime import datetime, timezone
-from model.errors import SkillNotFound,SkillReadOnly
-
+from model.errors import SkillNotFound,SkillReadOnly,SkillInvalid
+from skills.store import check_skill_id
 
 LOAD_REF_PREFIX = "skill://"
 
@@ -43,6 +43,27 @@ class SkillRegistry:
         # 管理 API 的"读-改-写"需要在同一把锁下完成
         self.lock = threading.Lock()
         self.reload()
+
+    def _parse_load_ref(self,load_ref:str) -> str:
+        """校验并剥离 skill:// 前缀，返回 skill_id。"""
+        if not load_ref.startswith(LOAD_REF_PREFIX):
+            raise SkillInvalid(f"load_ref 必须以 {LOAD_REF_PREFIX} 开头: {load_ref!r}")
+        skill_id = load_ref[len(LOAD_REF_PREFIX):].strip()
+        return check_skill_id(skill_id)  # 校验并返回，一步完成
+
+    def _load_visible(self,skill_id:str) -> SkillDetail:
+        """禁用或未通过校验的，按不存在处理 """
+        detail = self.get(skill_id)
+        if not (detail.enabled and detail.validation_status == "valid"):
+            raise SkillNotFound(f"skill 不存在：{skill_id}")
+        return detail
+
+    def read_for_model(self,load_ref:str) -> dict[str, object]:
+        """  对外的入口，返回 detail.to_model_context()  """
+        skill_id = self._parse_load_ref(load_ref)
+        detail = self._load_visible(skill_id)
+        return detail.to_model_context()
+
 
     def reload(self) -> None:
         skills: dict[str, SkillDetail] = {}

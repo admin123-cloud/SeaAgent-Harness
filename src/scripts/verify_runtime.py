@@ -44,7 +44,7 @@ async def check_wiring(deps):
 
     # A2.断言skill目录合理
     skill_ids = []
-    for summary in deps.skill_toolkit.catalog():
+    for summary in deps.skill_registry.summaries():
         skill_ids.append(summary.skill_id)
 
     bad = [i for i in skill_ids if i.startswith(("builtin/", "buildin/"))]
@@ -99,7 +99,7 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
 
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
-    seen_tools: list[tuple[str,str]]  = []
+    seen_tools: list[tuple[str, object | None]] = set()
     for i, d in enumerate(llm.decisions,start=1):
         if isinstance(d, ToolCallDecision):
             tool_calls = d.tool_calls
@@ -150,13 +150,14 @@ async def main() -> int:
     exit_code = EXIT_OK
     try:
         runtime = AgentRuntime(llm=llm, tool_registry=deps.tool_registry,
-                               skill_toolkit=deps.skill_toolkit, max_rounds=5,
+                               skill_registry=deps.skill_registry, max_rounds=5,
                                event_sink=lambda t, d: events.append((t, d)))
         result = await runtime.run(request)
     except (LLMError, AgentRuntimeError) as e:
         print(f"[FAIL][模型侧] {type(e).__name__}: {e}")  # 退出码 2，不是接线问题
-        print(f"  错误摘要：{e.error_summary}")
-        print(f"  原始输出前300字：{e.raw_preview!r}")
+        if isinstance(e, LLMOutputError):
+            print(f"  错误摘要：{e.error_summary}")
+            print(f"  原始输出前300字：{e.raw_preview!r}")
         exit_code = EXIT_MODEL
     finally:
         await adapter.aclose()

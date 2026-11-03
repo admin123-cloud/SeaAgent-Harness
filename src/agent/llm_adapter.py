@@ -6,4 +6,4 @@ from model.request import DecisionRequest
 class LLMAdapter(Protocol):
 
     async def decide(self,request: DecisionRequest) -> AgentDecision:
-        pass
+        ...

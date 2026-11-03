@@ -6,7 +6,7 @@ from model.enums import PermissionMode
 from model.models import FinalDecision, ToolCallDecision, ToolResult
 from model.request import DecisionRequest
 from model.errors import AgentRuntimeError
-from skills import SkillToolkit
+from skills import SkillRegistry
 
 
 # AgentRuntime agent运行时
@@ -20,7 +20,7 @@ class AgentRuntime:
             # tool注册
             tool_registry: ToolRegistry,
             # skill注册
-            skill_toolkit: SkillToolkit,
+            skill_registry: SkillRegistry,
 
             max_rounds:int = 5,
             event_sink : RuntimeEventSink | None = None,
@@ -31,7 +31,7 @@ class AgentRuntime:
             raise ValueError("max_rounds 必须大于 0")
         self.llm = llm
         self.registry = tool_registry
-        self.skill_toolkit = skill_toolkit
+        self.skill_registry = skill_registry
         self.max_rounds = max_rounds
         self.event_sink  = event_sink
         # 会话级权限模式；真正的审批/放行逻辑由后续 PermissionPolicy 接入。
@@ -61,7 +61,7 @@ class AgentRuntime:
 
         if "available_skills" not in context:
             available_skills = []
-            for skill in self.skill_toolkit.catalog():
+            for skill in self.skill_registry.summaries():
                 skill_data = skill.model_dump(mode="json")
                 available_skills.append(skill_data)
             context["available_skills"] = available_skills

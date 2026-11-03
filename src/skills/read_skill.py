@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from .toolkit import  SkillToolkit
+from .registry import SkillRegistry
 from tools import ToolSpec
 
 """ 注册所有工具Registry，并注册内置工具 """
@@ -7,10 +7,10 @@ class ReadSkillInput(BaseModel):
     load_ref:str = Field(description="skill://<skill_id>，来自 available_skills 目录")
 
 # 适配层：只做接线 ← ToolSpec 注册写这里
-def build_read_skill_spec(toolkit: SkillToolkit) -> ToolSpec:
+def build_read_skill_spec(registry: SkillRegistry) -> ToolSpec:
 
     async def run_read_skill(arguments: ReadSkillInput) -> dict[str, object]:
-        return toolkit.read_skill(arguments.load_ref)  # 闭包捕获 toolkit
+        return registry.read_for_model(arguments.load_ref)  # 闭包捕获 toolkit
 
     return ToolSpec(
         name="read_skill",
