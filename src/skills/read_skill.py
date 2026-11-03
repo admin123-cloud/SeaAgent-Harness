@@ -10,7 +10,7 @@ class ReadSkillInput(BaseModel):
 def build_read_skill_spec(registry: SkillRegistry) -> ToolSpec:
 
     async def run_read_skill(arguments: ReadSkillInput) -> dict[str, object]:
-        return registry.read_for_model(arguments.load_ref)  # 闭包捕获 toolkit
+        return registry.read_for_model(arguments.load_ref)
 
     return ToolSpec(
         name="read_skill",

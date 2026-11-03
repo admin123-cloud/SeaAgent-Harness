@@ -48,3 +48,6 @@ testpaths = ["tests"]
 include = ["src"]
 extraPaths = ["src"]
 typeCheckingMode = "basic"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]

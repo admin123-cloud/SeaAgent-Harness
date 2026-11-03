@@ -1,11 +1,10 @@
-from .store import FileSkillStore
+from .store import FileSkillStore,check_skill_id
 from .models import SkillDetail,SkillSummary
 import json
 import threading
 import hashlib
 from datetime import datetime, timezone
 from model.errors import SkillNotFound,SkillReadOnly,SkillInvalid
-from skills.store import check_skill_id
 
 LOAD_REF_PREFIX = "skill://"
 
@@ -18,7 +17,7 @@ def _bump(version: str) -> str:
 # 要做一次前置判断  只有vaild和enable才能给模型使用
 def summary_of(detail: SkillDetail) -> SkillSummary:
     """第一层目录条目。load_ref 是逻辑引用，不暴露真实文件路径。"""
-    # load_ref = load reference,模型只拿它说"我要读这本手册"，Toolkit 负责换算成 skill_id → 查索引 → 返回内容。
+    # load_ref = load reference,模型只拿它说"我要读这本手册"，skill_id → 查索引 → 返回内容。
     return SkillSummary(
         skill_id=detail.skill_id,
         name=detail.name,

@@ -99,7 +99,7 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
 
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
-    seen_tools: list[tuple[str, object | None]] = set()
+    seen_tools: list[tuple[str, object | None]] = list()
     for i, d in enumerate(llm.decisions,start=1):
         if isinstance(d, ToolCallDecision):
             tool_calls = d.tool_calls
@@ -158,6 +158,8 @@ async def main() -> int:
         if isinstance(e, LLMOutputError):
             print(f"  错误摘要：{e.error_summary}")
             print(f"  原始输出前300字：{e.raw_preview!r}")
+            print(f"  finish_reason：{e.finish_reason}，总长度：{e.raw_length}")
+            print(f"  原始输出末尾200字：{e.raw_tail!r}")
         exit_code = EXIT_MODEL
     finally:
         await adapter.aclose()

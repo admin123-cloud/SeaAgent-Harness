@@ -95,20 +95,27 @@ class OpenAICompatibleLLMAdapter:
             raise LLMProviderError(f"CETC 网关返回 HTTP {exc.status_code}") from exc
         if not completion.choices:
             raise LLMOutputError("模型响应没有 choices")
-        content = completion.choices[0].message.content
+        choice = completion.choices[0]
+        content = choice.message.content
         if not content or not content.strip():
             raise LLMOutputError("模型响应内容为空")
 
         try:
             return _AGENT_DECISION_ADAPTER.validate_json(content)
         except ValidationError  as exc:
-            summary = [
-                f"{'.'.join(str(p) for p in e['loc']) or '<root>'}:{e['type']}"
-                for e in exc.errors()[:5]
-            ]
+            summary = []
+            for e in exc.errors()[:5]:
+                loc = ".".join(str(p) for p in e["loc"]) or "<root>"
+                item = f"{loc}:{e['type']}"
+                if e["type"] == "json_invalid":
+                    item += f" ({e['msg']})"  # 只含位置信息，不含输入内容
+                summary.append(item)
             raise LLMOutputError(
                 "模型响应不符合 AgentDecision  格式",
                 raw_preview=content[:300],
+                raw_tail=content[-200:],
+                raw_length=len(content),
+                finish_reason=getattr(choice, "finish_reason", None),
                 error_summary=summary,
             ) from exc
 

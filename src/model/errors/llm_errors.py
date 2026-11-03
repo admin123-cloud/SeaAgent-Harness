@@ -19,13 +19,13 @@ class LLMProviderError(LLMError):
 class LLMOutputError(LLMError):
     """响应无法解析或不符合 DecisionResponse。"""
 
-    def __init__(
-            self,
-            message: str,
-            *,
-            raw_preview: str | None = None,
-            error_summary: list[str] | None = None,
-    ) -> None:
+    def __init__(self, message: str, *, raw_preview: str | None = None,
+                 raw_tail: str | None = None, raw_length: int | None = None,
+                 finish_reason: str | None = None,
+                 error_summary: list[str] | None = None) -> None:
         super().__init__(message)
         self.raw_preview = raw_preview
+        self.raw_tail = raw_tail
+        self.raw_length = raw_length
+        self.finish_reason = finish_reason
         self.error_summary = error_summary or []
