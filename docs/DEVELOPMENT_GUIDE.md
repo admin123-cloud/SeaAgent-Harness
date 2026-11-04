@@ -43,6 +43,40 @@
 6. 助手进行 Review 和调试指导；
 7. 按验收标准确认完成后，再进入下一步骤。
 
+## 工程化教学约定
+
+本项目同时是一次大模型应用开发能力的训练：每个开发任务除了完成功能，还要带出工程判断。助手在设计说明和 Review 中，按下面三项标注：
+
+1. **面试考点**：这个任务对应的高频考点，以及面试官常见的问法；
+2. **业界做法**：主流产品（包括 Claude Code）和通用工程原则如何处理同类问题。助手没有这些产品的源码，只讲公开可见的设计；属于推断的部分必须明确标注；
+3. **本项目的取舍**：为什么当前阶段这样做、不做什么、满足什么条件再升级。
+
+补充约定：
+
+- 每次 Review 结束，助手附一道对应的面试问法；用户先自己组织答案，再对照要点；
+- 遇到的问题按“现象、定位、修复、防复发”记录，并尽量带上数字，作为项目深挖的素材（任务的验证记录写在 `docs/task/implementation.md`）；
+- 本约定只增加说明与标注，不改变上面的角色分工：核心代码仍由用户实现，也不为凑考点而提前实现后续模块，范围以 PRD 和 implementation 为准。
+
+### 考点与项目的对应关系
+
+下表只记录稳定的对应关系，任务的进度和状态以 `docs/task/implementation.md` 为准。
+
+| 考点 | 本项目对应点 |
+| --- | --- |
+| 模型调用：超时、重试、限流、成本 | `OpenAICompatibleLLMAdapter`、`LLMSettings`（超时和重试配置） |
+| 提示词与结构化输出 | 适配器的系统提示词、`AgentDecision` 校验、`LLMOutputError` 诊断、纠错重试 |
+| Agent 主循环与保护 | `AgentRuntime.run`：`max_rounds`、重复与无进展检测、熔断 |
+| 工具设计与权限 | `ToolSpec`、`ToolRegistry.execute`、`permission_mode`、只读与幂等标记 |
+| Skill 加载（先目录后正文） | `SkillRegistry.summaries` 与 `read_skill` |
+| 记忆与历史 | `agent_history`、Incident 的 evidence 与对话记录、阶段五的 Memory |
+| MCP | MCP Server 与 MCP Client 阶段 |
+| RAG | 阶段五的 Knowledge：切分、检索、评估、权限过滤 |
+| 评估与可观测 | `scripts/verify_runtime.py`、事件 sink、重试率与重复率等指标 |
+| 异步与稳定性 | Web 工作台的 Agent 执行方式、客户端断连、超时与重试的总耗时 |
+| 数据安全与 Prompt Injection | 日志、错误信息落库的脱敏；K8s 日志和 Jenkins 输出属于不可信数据，不当作指令 |
+| 选型与适配 | 多服务商差异、模型版本固定、更换模型前的评估 |
+| 项目深挖 | 每个已解决问题的“现象、定位、修复、防复发”记录 |
+
 ## 当前路线
 
 1. 由用户设计并实现 `Incident`、`StateManager` 和最小状态流转；
