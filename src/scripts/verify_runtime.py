@@ -120,7 +120,9 @@ def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision 
         print(f"第 {len(llm.requests)} 轮模型调用失败...")
 
     if result is not None:
-        print(f"{result.response.summary[:200]}")
+        rt = result.response
+        print(f"{rt.summary[:200]}")
+        print(f"findings={len(rt.findings)}  recommendations={len(rt.recommendations)}  confidence={rt.confidence}")
 
 async def main() -> int:
     offline = "--offline" in sys.argv

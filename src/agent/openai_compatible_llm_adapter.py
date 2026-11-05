@@ -1,4 +1,6 @@
 import json
+from typing import TypedDict, Literal
+
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -20,8 +22,15 @@ from config.llm_settings import LLMSettings
 from model.models import AgentDecision
 from model.request import DecisionRequest
 
+# 语法错误时重试次数  先写常量，之后再进 settings
+MAX_FORMAT_ATTEMPTS = 2
 # 创建解析器
 _AGENT_DECISION_ADAPTER = TypeAdapter(AgentDecision)
+
+class Message(TypedDict):
+    role:Literal["system", "user", "assistant","tool"]
+    content:str
+
 
 class OpenAICompatibleLLMAdapter:
     """ openai类型大模型适配器 """
@@ -34,14 +43,9 @@ class OpenAICompatibleLLMAdapter:
             max_retries=settings.max_retries,
         )
 
-
-    async def decide(self,request: DecisionRequest) -> AgentDecision:
+    def _build_message(self,request) -> list[Message]:
         request_data = request.model_dump(mode="json")
-        try:
-            # 请求模型 自动添加提示词
-            completion = await self.client.chat.completions.create(
-                model= self.settings.model,
-                messages = [
+        return [
                 #系统提示词
                     {
                         "role": "system",
@@ -74,6 +78,7 @@ class OpenAICompatibleLLMAdapter:
 
                             "需要外部信息时返回 kind=tool_call；"
                             "信息足够时返回 kind=final。"
+                            "字符串内部不要出现英文双引号，需要引用用「」"
                         ),
                     },
                     {
@@ -81,25 +86,10 @@ class OpenAICompatibleLLMAdapter:
                         "content": json.dumps(request_data, ensure_ascii=False),
                     },
                 ],
-                stream= False
-            )
-        except APITimeoutError as exc:
-            raise LLMTimeoutError("CETC 请求超时") from exc
-        except (AuthenticationError, PermissionDeniedError) as exc:
-            raise LLMAuthenticationError("CETC 密钥无效或无访问权限") from exc
-        except RateLimitError as exc:
-            raise LLMRateLimitError("CETC 网关限流") from exc
-        except APIConnectionError as exc:
-            raise LLMProviderError("无法连接 CETC 网关") from exc
-        except APIStatusError as exc:
-            raise LLMProviderError(f"CETC 网关返回 HTTP {exc.status_code}") from exc
-        if not completion.choices:
-            raise LLMOutputError("模型响应没有 choices")
+
+    def _parse(self,completion) -> AgentDecision:
         choice = completion.choices[0]
         content = choice.message.content
-        if not content or not content.strip():
-            raise LLMOutputError("模型响应内容为空")
-
         try:
             return _AGENT_DECISION_ADAPTER.validate_json(content)
         except ValidationError  as exc:
@@ -119,6 +109,57 @@ class OpenAICompatibleLLMAdapter:
                 error_summary=summary,
             ) from exc
 
+
+    def _complete(self,messages:list[Message]) -> tuple[str, str]:
+        try:
+            # d2 发送请求
+            completion = self.client.chat.completions.create(
+                model=self.settings.model,
+                messages=messages,
+                stream=False
+            )
+        except APITimeoutError as exc:
+            return "", f"GLM模型请求超时:{exc}"
+        except (AuthenticationError, PermissionDeniedError) as exc:
+            return "", f"GLM密钥无效或无访问权限:{exc}"
+        except RateLimitError as exc:
+            return "", f"GLM网关限流:{exc}"
+        except APIConnectionError as exc:
+            return "", f"无法连接 GLM 网关:{exc}"
+        except APIStatusError as exc:
+            return "", f"GLM 网关返回 HTTP {exc.status_code}:{exc}"
+
+        # 到这里 completion 一定存在
+        if not completion.choices:
+            return "", "模型响应没有 choices"
+
+        choice = completion.choices[0]
+        content = choice.message.content or ""
+        if not content or not content.strip():
+            raise LLMOutputError("模型响应内容为空")
+        return content, choice.finish_reason or "stop"
+
+
+    async def decide(self,request: DecisionRequest) -> AgentDecision:
+        # d1 请求模型 自动添加提示词
+        messages = self._build_message(request),
+        # d2 对模型请求记录次数 语法问题兜底自动重试
+        for attempt in 1,MAX_FORMAT_ATTEMPTS:
+            content,finish_reason = await self._complete(messages)
+            try:
+                # d3 解析大模型的相应信息
+                decision = self._parse(content)
+                self.stats.record(attempt)
+                return decision
+            except ValidationError as exc:
+                error = LLMOutputError(exc.errors, attempts=attempt)
+                if finish_reason == "length" or attempt == MAX_FORMAT_ATTEMPTS:
+                    raise error
+                #  消息中添加错误信息  新建列表，不改原列表
+                messages = messages + [
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": error.error_summary},
+                ]
 
     async def aclose(self) -> None:
         await self.client.close()

@@ -53,10 +53,4 @@ TOOL_CANDIDATES: tuple[ToolCandidate, ...] = (
         description="查询指定 Pod 容器在限定时间和行数范围内的日志。",
         required_permissions=frozenset({"k8s.pods.logs.read"}),
     ),
-    ToolCandidate(
-        name="k8s_create_pod",
-        description="在指定 namespace 创建 Pod；请求批准模式下应审批本次调用。",
-        required_permissions=frozenset({"k8s.pods.create"}),
-        risk_level="high",
-    ),
 )
