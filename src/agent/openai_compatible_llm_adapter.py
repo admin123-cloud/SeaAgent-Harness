@@ -170,7 +170,7 @@ class OpenAICompatibleLLMAdapter:
                 if finish_reason == "length" or  attempt == MAX_FORMAT_ATTEMPTS:
                     exc.attempts = attempt
                     self.stats.failed += 1
-                    raise LLMOutputError()
+                    raise
                 if attempt == 1:
                     self.stats.retried += 1
                 #  消息中添加错误信息  新建列表，不改原列表
