@@ -161,10 +161,10 @@
 | --- | --- | --- | --- | --- |
 | 1.1 | 结构 | `ToolRegistry`/`ToolSpec` 迁入 `tools/`；`ToolNotFoundError` 迁入独立的 `tool_errors.py` | `tools/registry.py`、`model/errors/tool_errors.py`、`agent/runtime.py`、`agent/__init__.py`、`tools/default_tools.py` | `VERIFYING` |
 | 1.2 | 结构 | 拆分 `skill_manager.py`：磁盘存储与内存注册表分开 | `skills/store.py`、`skills/registry.py`、`skills/toolkit.py`、`skills/__init__.py` | `VERIFYING` |
-| 1.3 | 结构 | 新建唯一接线点；`read_skill` 的 ToolSpec 迁入 `skills/`；删除 `default_tools.py`；`tools/__init__.py` 只导出 registry 相关符号 | `bootstrap.py`、`skills/tool.py`、`tools/__init__.py`、`web_app.py`、`scripts/verify_runtime.py` | `TODO` |
+| 1.3 | 结构 | 新建唯一接线点；`read_skill` 的 ToolSpec 迁入 `skills/`；删除 `default_tools.py`；`tools/__init__.py` 只导出 registry 相关符号 | `bootstrap.py`、`skills/read_skill.py`、`tools/__init__.py`、`web_app.py`、`scripts/verify_runtime.py` | `VERIFYING` |
 | 1.4 | 结构 | 同步打包配置与文档 | `pyproject.toml`、`CLAUDE.md` §4/§6/§8/§9、`README.md` | `TODO` |
-| 2.0 | 逻辑 | 重写 `verify_runtime.py`：A 层确定性接线检查 + B 层真实模型冒烟（录制代理）；退出码区分接线失败与模型侧失败；关闭适配器 | `scripts/verify_runtime.py` | `TODO` |
-| 2.1 | 逻辑 | `SkillToolkit` 并入 `SkillRegistry`，“模型可见”规则只保留一份 | `skills/registry.py`、`skills/toolkit.py`（删除） | `TODO` |
+| 2.0 | 逻辑 | 重写 `verify_runtime.py`：A 层确定性接线检查 + B 层真实模型冒烟（录制代理）；退出码区分接线失败与模型侧失败；关闭适配器 | `scripts/verify_runtime.py` | `VERIFYING` |
+| 2.1 | 逻辑 | `SkillToolkit` 并入 `SkillRegistry`，“模型可见”规则只保留一份 | `skills/registry.py`、`skills/toolkit.py`（删除） | `VERIFYING` |
 | 2.2 | 逻辑 | 两个 Registry 各提供 `describe_for_model()`；`AgentRuntime` 签名改为 `(llm, tools, skills)` | `tools/registry.py`、`skills/registry.py`、`agent/runtime.py`、`bootstrap.py` | `TODO` |
 | 2.3 | 逻辑 | 启动时校验 skill 的 `allowed_tools` 均已注册（先告警，不过滤）；工具异常信息脱敏后再进入 `summary` | `bootstrap.py`、`tools/registry.py` | `TODO` |
 
@@ -186,6 +186,7 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-28 | 1.1 | 全包导入检查 | 【待填：粘贴实际输出】 | — |
 | 2026-10-28 | 1.1 | `python -m scripts.verify_runtime` | 【待填：是否完成两轮工具调用、是否返回 FinalDecision】 | 无自动化断言，仅人工核对输出 |
+| 2026-11-09 | 1.3 / 2.0 / 2.1 | 依赖方向三条检查（Linux `grep` 等价命令）；检查文件是否存在 | 三条检查均无输出；`bootstrap.py`、`skills/read_skill.py` 存在；`default_tools.py`、`skills/toolkit.py`、`skill_manager.py` 已不存在；`web_app.py`、`verify_runtime.py` 不再出现 `SkillRegistry(`、`FileSkillStore(`；2.2（`describe_for_model`）、2.3（`allowed_tools` 校验）代码中尚无，仍为 `TODO` | 全包导入检查、`verify_runtime`（离线和真实模型）、2.0 的两个反向验证未在此环境执行（缺少依赖），待用户本地确认 |
 
 #### 遗留风险
 
@@ -195,7 +196,7 @@
 
 ### SDD-014 阶段一收尾：格式纠错重试、重复调用观测、批量统计
 
-- 状态：`IN_PROGRESS`（用户 2026-11-05 反馈：纠错重试与重复调用观测开发到一半）
+- 状态：`IN_PROGRESS`（2026-11-09：14.1、14.2 实现完成并通过离线验收，待用户本地真实模型确认；14.3 的 `ProgressTracker` 已通过离线验收，待接入 Runtime 和 `verify_runtime`）
 - 背景：2026-11-03 对 `verify_runtime` 批量运行 20 次，2 次因模型输出不合法 JSON 失败（`finish_reason=stop`；一次是字符串内多出英文双引号，一次是缺少最外层右括号），都发生在读取 skill 之后的最终回答轮；该批次未出现重复读取。此前约 31 次运行中约 3 次格式失败，失败率约 10%，需要在 Harness 内兜底，并有可重复的统计手段。
 - 目标：模型输出格式失败时由 Harness 有限次纠错重试并计数；重复调用在 Harness 内可观测；`verify_runtime` 可批量运行并输出统计。
 - 非目标：
@@ -210,11 +211,11 @@
 
 | 步骤 | 类型 | 内容 | 涉及文件 | 状态 |
 | --- | --- | --- | --- | --- |
-| 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：`_build_messages(request)`、`_complete(messages) -> (content, finish_reason)`、`_parse(content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `IN_PROGRESS` |
-| 14.2 | 逻辑 | 格式纠错重试：只对解析/校验失败重试，`finish_reason == "length"` 不重试；`LLMOutputError` 增加 `attempts`；适配器记录调用/重试/格式失败计数 | `agent/openai_compatible_llm_adapter.py`、`model/errors/llm_errors.py` | `IN_PROGRESS` |
+| 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：模块级函数 `_build_message(request)`、`_parse(content, finish_reason)`，方法 `_complete(messages) -> (content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `VERIFYING` |
+| 14.2 | 逻辑 | 格式纠错重试：只对解析/校验失败重试，`finish_reason == "length"` 不重试；`LLMOutputError` 增加 `attempts`；适配器记录调用/重试/格式失败计数 | `agent/openai_compatible_llm_adapter.py`、`model/errors/llm_errors.py` | `VERIFYING` |
 | 14.3 | 逻辑 | `ProgressTracker`（只观测）：按“工具名＋规范化参数”的签名和“结果指纹”判断重复与无进展；Runtime 每轮发出 `progress` 事件；`verify_runtime.report()` 改读事件 | `agent/progress.py`、`agent/runtime.py`、`scripts/verify_runtime.py` | `IN_PROGRESS` |
 | 14.4 | 逻辑 | 批量统计：`verify_runtime --runs N --jsonl 路径`；每次运行立即写一行 JSON；输出汇总 | `scripts/verify_runtime.py` | `TODO` |
-| 14.5 | 收尾 | 遗留小项：`load_llm_settings` 调用方切换并从 `config` 导出；`pyproject.toml` 增加 `[tool.ruff.lint.per-file-ignores]` 处理 `__init__.py` 的 F401；清理临时文件和 `pip-*` 目录；适配器错误文案去掉写死的网关名称（待用户确认） | `config/`、`web_app.py`、`scripts/verify_runtime.py`、`pyproject.toml` | `TODO` |
+| 14.5 | 收尾 | 遗留小项：`load_llm_settings` 调用方切换并从 `config` 导出；`pyproject.toml` 增加 `[tool.ruff.lint.per-file-ignores]` 处理 `__init__.py` 的 F401；清理临时文件和 `pip-*` 目录；适配器错误文案去掉写死的网关名称（用户已清理；2026-11-09 核对 `src` 内无 `CETC`、`GLM` 字样） | `config/`、`web_app.py`、`scripts/verify_runtime.py`、`pyproject.toml` | `TODO` |
 
 #### 设计要点
 
@@ -225,9 +226,11 @@
   - 网络、超时、限流类错误仍由 SDK 的 `max_retries` 和现有错误归一化处理，不属于格式重试；
   - 最坏耗时需要记录：单次请求超时 × (1 + SDK 重试次数) × 尝试次数 × 轮数，作为 Web 异步化的依据。
 - `ProgressTracker`：
-  - 签名：工具名＋对 `arguments` 做 `sort_keys` 序列化后的字符串；字符串值先 `strip`；`read_skill` 以解析后的 `skill_id` 为准；
+  - 签名：工具名＋对 `arguments` 做 `sort_keys` 序列化后的字符串；字符串值递归 `strip`（嵌套字典、列表同样处理）；2026-11-09 裁定不对 `read_skill` 做 `skill_id` 特殊处理：`check_skill_id` 不做归一化，除空白外几乎没有“写法不同但指向同一 skill”的情况，待批量数据出现误报再加；
   - 指纹：对 `success`、`error_type`、`data` 做哈希，排除 `call_id`、`elapsed_ms`、`summary` 等每次都变化的字段；
   - 判定：签名重复且指纹相同为“无进展”；签名重复但指纹不同（如轮询）为“有进展”，仍计入重复次数；
+  - `repeats`：同一签名在本次 run 中累计出现的次数，首次出现为 1；`stalled_rounds`：连续无进展的轮数，任一调用为新签名或指纹变化即清零；
+  - `ProgressTracker` 是每次 run 新建的实例，不使用模块级状态（避免跨请求、跨批量运行互相污染，也避免字典随进程无限增长）；
   - 事件：`progress`，字段 `round`、`repeats`、`stalled_rounds`。
 - 批量统计：
   - 顺序执行，不并发；每次运行后立即写 jsonl 并刷新，Ctrl+C 不丢已有数据；
@@ -239,7 +242,7 @@
 #### 验收标准
 
 - [ ] 14.1：搬家前后 `verify_runtime`（离线和真实模型）行为一致，三项检查通过；
-- [ ] 14.2（离线，用按脚本返回的假 client，不调用真实模型）：
+- [x] 14.2（离线，用按脚本返回的假 client，不调用真实模型；2026-11-09 通过，见验证记录）：
   - 第一次坏 JSON、第二次正确：返回决策；`create` 被调用 2 次；第二次的 `messages` 比第一次多 2 条，倒数第二条是第一次的坏输出；重试计数为 1；
   - 两次都坏：抛 `LLMOutputError`，`attempts == 2`；
   - 第一次 `finish_reason == "length"`：只调用 1 次；
@@ -247,10 +250,11 @@
   - `APITimeoutError` 等网络类错误：不触发格式重试，转换为对应的 `LLMError` 子类；
   - `error_summary` 中不含输入内容；
 - [ ] 14.3（假 LLM，离线）：
-  - 连续两轮调用同一个 `read_skill`：第 2 轮 `repeats == 1`；
+  - 连续两轮调用同一个 `read_skill`：第 2 轮 `repeats == 2` 且 `stalled_rounds == 1`；
   - 参数键顺序不同：签名相同；
-  - 读取两个不同的 skill：`repeats == 0`；
-  - 同一签名但假工具每次返回不同值：`repeats == 1` 且 `stalled_rounds == 0`；
+  - 读取两个不同的 skill：各自 `repeats == 1`；
+  - 同一签名但假工具每次返回不同值：`repeats` 递增（第 2 轮为 2）且 `stalled_rounds == 0`；
+  - 两个 `ProgressTracker` 实例互不影响；
   - 改变 `call_id`、`elapsed_ms` 不改变指纹；
   - 加入 `progress` 事件后，`check_history` 的断言仍全部通过；
   - `verify_runtime.report()` 不再自带重复判断逻辑；
@@ -262,6 +266,10 @@
 | 日期 | 步骤 | 命令 | 结果摘要 | 未验证项 |
 | --- | --- | --- | --- | --- |
 | 2026-11-03 | 基线 | `verify_runtime` 批量 20 次（PowerShell 循环） | 18 次成功，2 次模型侧格式失败，0 次重复读取，无接线失败 | 无纠错重试；日志统计依赖输出格式 |
+
+| 2026-11-09 | 14.2 | 假 client（桩替代 `openai`，使用真实 pydantic 模型）离线 6 组用例 | 好 JSON：请求 1 次、重试计数 0；一坏一好：请求 2 次、第二次 `messages` 多 2 条（倒数第二条为 `assistant` 且等于第一次坏输出，最后一条为 `user`）、`retried=1`、原消息列表未被修改；两次都坏：抛 `LLMOutputError`，`attempts=2`、`failed=1`；`finish_reason=length`：请求 1 次、不重试、异常带 `finish_reason=length`；`APITimeoutError`、`RateLimitError`、`AuthenticationError` 分别转为 `LLMTimeoutError`、`LLMRateLimitError`、`LLMAuthenticationError`，请求 1 次、不触发格式重试、保留异常链；`error_summary` 与纠错消息均不含输入内容 | 真实模型运行、`verify_runtime`、全包导入检查未在此环境执行（缺少依赖）；检查脚本未入库 |
+| 2026-11-09 | 14.1 | 同上（行为等价由 14.2 用例间接覆盖） | `_build_message`、`_parse` 已提为模块级函数，调用链与 14.2 用例一致 | 搬家前后 `verify_runtime` 离线和真实模型对比未执行 |
+| 2026-11-09 | 14.3 | 使用真实 `ToolCall`/`ToolResult` 对 `agent/progress.py` 离线 7 组用例 | 同调用同结果连续 3 轮：`(repeats, stalled_rounds)` 为 (1,0)(2,1)(3,2)；同调用结果每轮变化：stalled 恒为 0；键序与首尾空白（含嵌套）不同签名相同；不同 skill 签名不同；`data` 键序不同指纹相同，`summary`、`elapsed_ms`、`call_id` 不影响指纹；重复两轮后出现新调用 stalled 回到 0；新实例互不影响 | 尚未接入 `runtime` 的 `progress` 事件与 `verify_runtime.report()`；`check_history` 回归未执行 |
 
 （各步骤完成后在此追加记录。）
 
@@ -290,7 +298,7 @@
 
 | 步骤 | 内容 | 涉及文件 | 状态 |
 | --- | --- | --- | --- |
-| 15.0 | 设计评审：裁定 Kubernetes 访问形态（见下方“待裁定”），并为测试集群创建专用只读账号、记录验证命令输出 | 本文档 | `TODO` |
+| 15.0 | 设计评审：Kubernetes 访问形态已于 2026-11-09 裁定（见下方“已裁定”）；仍需为测试集群创建专用只读账号、记录验证命令输出 | 本文档 | `IN_PROGRESS` |
 | 15.1 | 配置：`K8S_API_SERVER`、`K8S_TOKEN`（`SecretStr`）、`K8S_CA_FILE`、`K8S_ALLOWED_NAMESPACES`；未配置则不注册 K8s 工具；只配置了一部分则启动失败；TLS 校验必须开启 | `config/`、`bootstrap.py` | `TODO` |
 | 15.2 | 输出脱敏模块：模式脱敏和“已知秘密精确匹配”两层，接入 `ToolRegistry.execute`，使任何工具都无法绕过 | `tools/redaction.py`、`tools/registry.py` | `TODO` |
 | 15.3 | `k8s_list_pods` | `tools/kubernetes.py` | `TODO` |
@@ -325,17 +333,24 @@
 - 位置：`ToolRegistry.execute` 返回前统一处理，覆盖 `summary`、`data` 和错误信息；
 - 幂等：对已脱敏文本再次脱敏结果不变。
 
-#### 待裁定
+#### 已裁定（2026-11-09）
 
-Kubernetes 访问形态（15.0 由用户裁定，在此之前不开始编码）：
+Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）：
 
 | 形态 | 优点 | 代价 |
 | --- | --- | --- |
-| A. `httpx` 直接访问 API Server（只读 GET） | 无新增依赖；原生异步；不经过 Shell；输出是结构化 JSON，便于脱敏和截断 | 需要自己处理少量 JSON 结构 |
-| B. 官方 `kubernetes` Python 客户端 | 接口完整 | 新增依赖；以阻塞调用为主，需放入线程并设超时 |
+| A. `httpx` 直接访问 API Server（只读 GET）**（采用）** | 无新增依赖；原生异步；不经过 Shell；输出是结构化 JSON，便于脱敏和截断 | 需要自己处理少量 JSON 结构、TLS 和分页 |
+| B. 官方 `kubernetes` Python 客户端 | 接口完整；自带 kubeconfig 解析和多种认证 | 新增依赖；以阻塞调用为主，需放入线程并设超时（社区另有异步版，选用前需核对）；同一对象含写方法，只读要靠窄接口保证 |
 | C. `kubectl` 子进程 | 输出与日常使用一致 | 需严格参数数组和超时；token 不宜放命令行；输出为文本，解析和脱敏更难 |
+| D. SSH 到节点后执行 `kubectl` | — | 通常需要管理员级权限；命令注入面最大；不符合专用只读账号，**不采用** |
 
-建议先采用 A；最终以用户裁定为准。
+配套约定：
+
+- **窄接口**：工具层定义只有 4 个只读方法（列 Pod、取 Pod、取事件、取 Pod 日志）的 `K8sReadClient`，四个工具只依赖该接口；切片一用 A 实现。
+- **扩展方式**：其他类型的集群或其他客户端（含 B）以后作为扩展提供实现。现在只保留接缝，不实现扩展加载器；扩展代码在进程内运行并接触解密后的凭据，因此只能由运维显式安装并写入配置白名单，不得由模型触发，其工具同样经过 `ToolRegistry`（脱敏、只读检查对其同样生效）。
+- **认证按凭据类型选择，由 Harness 根据目标决定，模型不参与**：切片一仅支持 Bearer token（本地配置）；SDD-016 增加客户端证书和 kubeconfig（带 `exec` 插件的暂不支持）；用户名密码不能用于原生 Kubernetes API Server（1.19 起已移除 basic auth），遇到时明确报错并提示改用 token、证书或 kubeconfig；Rancher、OpenShift 等平台的登录换 token 属于以后的扩展。
+- **不做自动降级**：不因为缺少 token 就退回“SSH 后执行 kubectl”，避免悄悄扩大权限、审计失真；如需此路径，由运维显式登记为服务器目标（SDD-017）。
+- **网络可达性**：Harness 到 API Server 的网络连通由使用者保证；但工具返回的错误必须能区分连接超时、证书校验失败、401 和 403。
 
 #### 专用只读账号（15.0 的产出）
 
@@ -362,7 +377,8 @@ Kubernetes 访问形态（15.0 由用户裁定，在此之前不开始编码）�
 
 #### 验收标准
 
-- [ ] 访问形态已裁定，专用只读账号已创建，权限验证命令输出已记录；Agent 运行时不使用管理员凭据；
+- [ ] 访问形态已裁定（2026-11-09：A），专用只读账号已创建，权限验证命令输出已记录；Agent 运行时不使用管理员凭据；
+- [ ] 错误可区分：连接超时、证书校验失败、401、403 返回不同的 `error_type`，并给出可操作的提示；
 - [ ] 配置缺失或不完整时按规则处理（不注册或启动失败）；TLS 校验开启；
 - [ ] 非 allowlist 的 namespace、非法名称、过长或含特殊字符的 `label_selector` 被拒绝；
 - [ ] 四个工具有超时、结果和日志上限；失败时返回明确的 `error_type`；
@@ -549,6 +565,7 @@ Kubernetes 访问形态（15.0 由用户裁定，在此之前不开始编码）�
 | 2026-10-27 | SDD-005 真模型验证 | `verify_runtime.py` 以真实 OpenAI-compatible 模型完成最小调用：demo_echo + read_skill 两轮工具调用，`DecisionResponse` 校验通过 | 需补可重复断言；evidence_ids 契约待收紧 |
 | 2026-10-28 | SDD-013 启动 / 步骤 1.1 | 登记任务；`ToolRegistry`/`ToolSpec` 从 `agent/tool_registry.py` 迁至 `tools/registry.py`；`ToolNotFoundError` 迁至 `model/errors/tool_errors.py`；Runtime 与 `default_tools.py` 的导入同步修改 | 只移动和改导入，未改逻辑；验证记录见 SDD-013 |
 | 2026-11-05 | 路线规划 | 登记 SDD-014（阶段一收尾）、SDD-015/016/017（阶段二切片一至三）；记录决策：模型端点按最不可信处理、主密钥文件位置、凭据只写不读、暂不抽象多协议适配器、切片一采用直接工具注册；PRD 增加 FR-017～FR-021 | 仅文档变更，代码未改动；SDD-013 等历史条目状态待同步 |
+| 2026-11-09 | SDD-013/014/015 | 同步台账：SDD-013 的 1.3、2.0、2.1 与 SDD-014 的 14.1、14.2 转 `VERIFYING`；14.3 的 `ProgressTracker` 通过离线验收，待接入 Runtime；更正 14.3 设计（递归 `strip`、不特殊处理 `read_skill`、`repeats` 首次出现计 1、实例状态）；SDD-015 裁定访问形态 A 并记录窄接口、扩展、认证与不降级约定；`CETC`/`GLM` 字样已清理 | 离线验证：假 client 与桩对象；环境缺少依赖，全包导入和 `verify_runtime` 未执行，待用户本地确认 |
 
 ## 9. 阻塞与风险
 
