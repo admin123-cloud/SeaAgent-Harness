@@ -1,5 +1,6 @@
 import json
 from typing import TypedDict, Literal
+from dataclasses import dataclass
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -25,6 +26,13 @@ from model.request import DecisionRequest
 MAX_FORMAT_ATTEMPTS = 2
 # 创建解析器
 _AGENT_DECISION_ADAPTER = TypeAdapter(AgentDecision)
+
+
+@dataclass
+class FormatStats:
+    decisions: int = 0  # decide() 被调用的次数
+    retried: int = 0  # 至少触发过一次重试的决策数
+    failed: int = 0  # 最终仍然格式失败的决策数
 
 class Message(TypedDict):
     role:Literal["system", "user", "assistant","tool"]
@@ -91,9 +99,18 @@ def _parse(content, finish_reason) -> AgentDecision:
             raw_preview=content[:300],
             raw_tail=content[-200:],
             raw_length=len(content),
-            finish_reason=getattr(finish_reason=finish_reason),
+            finish_reason=finish_reason,
             error_summary=summary,
         ) from exc
+
+def _correction_message(error_summary: list[str]) -> str:
+    problems = "；".join(error_summary) or "无法解析为合法 JSON"
+    return (
+        f"你上一条回复无法被解析，问题位置：{problems}。\n"
+        "请重新输出，只返回一个合法 JSON 对象，"
+        "格式必须与系统提示中的两种格式之一完全一致，"
+        "不要添加 Markdown、代码块或任何解释。"
+    )
 
 class OpenAICompatibleLLMAdapter:
     """ openai类型大模型适配器 """
@@ -105,7 +122,7 @@ class OpenAICompatibleLLMAdapter:
             timeout=settings.timeout_seconds,
             max_retries=settings.max_retries,
         )
-        self.stats = 0
+        self.stats = FormatStats()
 
 
     async def _complete(self,messages:list[Message]) -> tuple[str, str]:
@@ -129,7 +146,7 @@ class OpenAICompatibleLLMAdapter:
 
         # 到这里 completion 一定存在
         if not completion.choices:
-            raise LLMProviderError(f"模型响应没有 choices")
+            raise LLMProviderError("模型响应没有 choices")
 
         choice = completion.choices[0]
         content = choice.message.content or ""
@@ -139,11 +156,11 @@ class OpenAICompatibleLLMAdapter:
 
 
     async def decide(self,request: DecisionRequest) -> AgentDecision:
+        self.stats.decisions += 1
         # d1 请求模型 自动添加提示词
         messages = _build_message(request)
         # d2 对模型请求记录次数 语法问题兜底自动重试
         for attempt in range(1,MAX_FORMAT_ATTEMPTS+1):
-            self.stats += 1
             content,finish_reason = await self._complete(messages)
             try:
                 # d3 解析大模型的相应信息
@@ -151,13 +168,17 @@ class OpenAICompatibleLLMAdapter:
                 return decision
             except LLMOutputError as exc:
                 if finish_reason == "length" or  attempt == MAX_FORMAT_ATTEMPTS:
+                    exc.attempts = attempt
+                    self.stats.failed += 1
                     raise LLMOutputError()
+                if attempt == 1:
+                    self.stats.retried += 1
                 #  消息中添加错误信息  新建列表，不改原列表
                 messages = messages + [
                     Message(role="assistant",content= content),
-                    Message(role="user", content= exc.error_summary),
+                    Message(role="user", content= _correction_message(exc.error_summary)),
                 ]
-        return None
+        raise LLMOutputError("格式重试次数耗尽")
 
     async def aclose(self) -> None:
         await self.client.close()

@@ -1,5 +1,6 @@
 import json
 import hashlib
+from typing import Any
 from dataclasses import dataclass
 from model.models.tool_call import ToolCall,ToolResult
 
@@ -15,21 +16,43 @@ class FingerCount:
     fp:str
 
 # 观测对象
-class Tracker:
-    def __init__(self, round_no: int, repeats: int, stalled_rounds: int):
-        self.round_no = round_no
-        self.repeats = repeats
-        self.stalled_rounds = stalled_rounds
+@dataclass
+class ProgressObservation:
+    round_no: int
+    repeats: int
+    stalled_rounds: int
 
 def signature_of(call: ToolCall) -> str:
     # 将skill   格式化  规范化
     # s1 字符串值先 strip;  这样 "skill://a/b " 和 "skill://a/b" 是同一个签名；
     # s2 用json.dumps(..., sort_keys=True, ensure_ascii=False) 将参数排序和保留中文
+
     payload = {
         "tool_name":call.tool_name.strip(),
-        "arguments":call.arguments.items()
+        "arguments":normalize_args(call.arguments)
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+def normalize_args(data:Any) -> Any:
+    """
+    递归原则：
+    1. 遇到字符串：返回 s.strip()
+    2. 遇到字典：对每个值递归处理
+    3. 遇到列表：对每个元素递归处理
+    4. 其他类型(数字、布尔、None等)：原样返回
+    """
+    if isinstance(data, str):
+        return data.strip()
+    elif isinstance(data, dict):
+        # 递归处理字典的每一个 value (保持 key 原样)
+        return {k: normalize_args(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        # 递归处理列表的每一个元素
+        return [normalize_args(v) for v in data]
+    else:
+        # int, float, bool, None 等直接原样返回
+        return data
+
 
 def fingerprint_of(result: ToolResult) -> str:
     #对success / error_type / data取hash, 排除call_id、elapsed_ms、summary。
@@ -51,18 +74,12 @@ def fingerprint_of(result: ToolResult) -> str:
     return hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
 
 class ProgressTracker:
-    tool_name:str
-    result_finger:str
-    observe:str
 
-    def __init__(self, tool_name:str, result_finger:str, observe:str):
-        self.tool_name = tool_name
-        self.result_finger = result_finger
-        self.observe = observe
+    def __init__(self):
         self._stalled = 0
         self._seen_round : dict[str,FingerCount]= {}
 
-    def observe_round(self,round_no,pairs: list[tuple[ToolCall, ToolResult]]) -> Tracker:
+    def observe_round(self,round_no,pairs: list[tuple[ToolCall, ToolResult]]) -> ProgressObservation:
         #包含 repeats(同签名第几次)和 progressed(指纹相对上次是否变了),并内部累计 stalled_rounds。
         progressed = False
         max_repeats = 0
@@ -78,10 +95,10 @@ class ProgressTracker:
                 if prev.fp != fp:
                     # 同调用但结果变了
                     progressed = True
-                self._seen_round[sig] = FingerCount(times=times,fp=fp)
+            self._seen_round[sig] = FingerCount(times=times,fp=fp)
             max_repeats = max(max_repeats, times)
         if progressed:
             self._stalled = 0
         else:
             self._stalled += 1
-        return Tracker(round_no, repeats=max_repeats, stalled_rounds=self._stalled)
+        return ProgressObservation(round_no, repeats=max_repeats, stalled_rounds=self._stalled)
