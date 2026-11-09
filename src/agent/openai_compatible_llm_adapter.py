@@ -1,6 +1,5 @@
 import json
 from typing import TypedDict, Literal
-
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -75,7 +74,7 @@ def _build_message(request) -> list[Message]:
                 },
             ]
 
-def _parse(content, finish_reason,attempt) -> AgentDecision:
+def _parse(content, finish_reason) -> AgentDecision:
     try:
         return _AGENT_DECISION_ADAPTER.validate_json(content)
     except ValidationError  as exc:
@@ -84,17 +83,17 @@ def _parse(content, finish_reason,attempt) -> AgentDecision:
             loc = ".".join(str(p) for p in e["loc"]) or "<root>"
             item = f"{loc}:{e['type']}"
             if e["type"] == "json_invalid":
-                item += f" ({e['msg']})"  # 只含位置信息，不含输入内容
-                summary.append(item)
-            raise LLMOutputError(
-            "模型响应不符合 AgentDecision  格式",
-                raw_preview=content[:300],
-                raw_tail=content[-200:],
-                raw_length=len(content),
-                finish_reason=getattr(finish_reason, "finish_reason", None),
-                error_summary=summary,
-                attempts= attempt
-            ) from exc
+                # 只含位置信息，不含输入内容
+                item += f" ({e['msg']})"
+            summary.append(item)
+        raise LLMOutputError(
+        "模型响应不符合 AgentDecision  格式",
+            raw_preview=content[:300],
+            raw_tail=content[-200:],
+            raw_length=len(content),
+            finish_reason=getattr(finish_reason=finish_reason),
+            error_summary=summary,
+        ) from exc
 
 class OpenAICompatibleLLMAdapter:
     """ openai类型大模型适配器 """
@@ -106,6 +105,7 @@ class OpenAICompatibleLLMAdapter:
             timeout=settings.timeout_seconds,
             max_retries=settings.max_retries,
         )
+        self.stats = 0
 
 
     async def _complete(self,messages:list[Message]) -> tuple[str, str]:
@@ -129,7 +129,7 @@ class OpenAICompatibleLLMAdapter:
 
         # 到这里 completion 一定存在
         if not completion.choices:
-            return "", "模型响应没有 choices"
+            raise LLMProviderError(f"模型响应没有 choices")
 
         choice = completion.choices[0]
         content = choice.message.content or ""
@@ -140,24 +140,24 @@ class OpenAICompatibleLLMAdapter:
 
     async def decide(self,request: DecisionRequest) -> AgentDecision:
         # d1 请求模型 自动添加提示词
-        messages = self._build_message(request)
+        messages = _build_message(request)
         # d2 对模型请求记录次数 语法问题兜底自动重试
-        for attempt in (1,MAX_FORMAT_ATTEMPTS+1):
+        for attempt in range(1,MAX_FORMAT_ATTEMPTS+1):
+            self.stats += 1
             content,finish_reason = await self._complete(messages)
             try:
                 # d3 解析大模型的相应信息
-                decision = self._parse(content,finish_reason,attempt)
+                decision = _parse(content,finish_reason)
                 return decision
             except LLMOutputError as exc:
-                if finish_reason == "length" :
-                    raise LLMOutputError(exc.error_summary)
-                if  exc.attempts == MAX_FORMAT_ATTEMPTS:
-                    raise LLMOutputError(exc.error_summary)
+                if finish_reason == "length" or  attempt == MAX_FORMAT_ATTEMPTS:
+                    raise LLMOutputError()
                 #  消息中添加错误信息  新建列表，不改原列表
                 messages = messages + [
                     Message(role="assistant",content= content),
                     Message(role="user", content= exc.error_summary),
                 ]
+        return None
 
     async def aclose(self) -> None:
         await self.client.close()

@@ -22,12 +22,10 @@ class LLMOutputError(LLMError):
     def __init__(self, message: str, *, raw_preview: str | None = None,
                  raw_tail: str | None = None, raw_length: int | None = None,
                  finish_reason: str | None = None,
-                 error_summary: list[str] | None = None,
-                 attempts: int = 1,) -> None :
+                 error_summary: list[str] | None = None) -> None :
         super().__init__(message)
         self.raw_preview = raw_preview
         self.raw_tail = raw_tail
         self.raw_length = raw_length
         self.finish_reason = finish_reason
         self.error_summary = error_summary or []
-        self.attempts = attempts
