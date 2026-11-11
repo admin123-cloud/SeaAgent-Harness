@@ -1,7 +1,7 @@
 import sys
 import asyncio
 from bootstrap import build_deps
-from agent import AgentRuntime,OpenAICompatibleLLMAdapter
+from agent import AgentRuntime,OpenAICompatibleLLMAdapter,ProgressTracker
 from model.enums import DecisionTask
 from model.request import DecisionRequest
 from model.errors import LLMError, AgentRuntimeError,LLMOutputError
@@ -99,20 +99,23 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
 
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
-    seen_tools: list[tuple[str, object | None]] = list()
-    for i, d in enumerate(llm.decisions,start=1):
+    progress = {}
+    for t,d in events:
+        if t == "progress":
+            round_number = d["round"]
+            progress[round_number] = d
+    for i, d in enumerate(llm.decisions, start=1):
+        pro = progress.get(i)  # 最后一轮是 final,没有 progress 事件,所以用 .get
         if isinstance(d, ToolCallDecision):
             tool_calls = d.tool_calls
             for tool_call in tool_calls:
                 tool_name = tool_call.tool_name
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
-                key = (tool_name, load_ref)
-                if key in seen_tools:
+                if pro is not None and pro["repeats"] > 1:
                     print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s , ⚠ 重复读取")
-                else:
-                    seen_tools.append(key)
-                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s")
+                if pro is not None and pro["stalled_rounds"] > 0:
+                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s,⚠ 连续 N 轮无进展")
         else:# FinalDecision
             print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]:.1f}s")
 

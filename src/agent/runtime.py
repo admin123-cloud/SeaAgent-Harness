@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
-from agent.llm_adapter import LLMAdapter
+from .llm_adapter import LLMAdapter
+from .progress import ProgressTracker
 from tools.registry import ToolRegistry
 from model.enums import PermissionMode
 from model.models import FinalDecision, ToolCallDecision, ToolResult
@@ -102,7 +103,7 @@ class AgentRuntime:
     async def run(self,request: DecisionRequest,) -> FinalDecision:
         # R1.调用模型前准备参数
         current_request = self._prepare_request(request)
-
+        tracker = ProgressTracker()
         for round_number in range(1,self.max_rounds+1):
             decision = await self.llm.decide(current_request)
 
@@ -114,30 +115,30 @@ class AgentRuntime:
 
             # R2 调用工具逻辑 & 工具调用前
             results: list[ToolResult] = []
-            self._emit(
-                "tool_call",
-                {
-                    "round": round_number,
-                    "permission_mode": self.permission_mode.value,
-                    "tool_calls": decision.model_dump(mode="json")["tool_calls"],
-                },
-            )
+            self._emit("tool_call",{
+                "round": round_number,
+                "permission_mode": self.permission_mode.value,
+                "tool_calls": decision.model_dump(mode="json")["tool_calls"],
+            })
             # R3.工具调用
             for tool_call in decision.tool_calls:
                 result = await self.registry.execute(tool_call)
                 results.append(result)
             # 工具调用后  生成触发事件类型 ToolCallingResult
-            self._emit(
-                "tool_result",
-                {
-                    "round": round_number,
-                    "results": [
-                        result.model_dump(mode="json")
-                        for result in results
-                    ],
-                },
-            )
-
+            self._emit("tool_result",{
+                "round": round_number,
+                "results": [
+                    result.model_dump(mode="json")
+                    for result in results
+                ],
+            })
+            pairs = list(zip(decision.tool_calls, results))
+            obs = tracker.observe_round(round_number,pairs)
+            self._emit("progress", {
+                "round": obs.round_no,
+                "repeats": obs.repeats,
+                "stalled_rounds": obs.stalled_rounds,
+            })
             current_request = self._append_tool_round(current_request, round_number,decision, results)
 
         raise AgentRuntimeError(f"超过最大决策轮次{self.max_rounds}")
