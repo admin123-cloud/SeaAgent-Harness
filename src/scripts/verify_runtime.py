@@ -113,14 +113,14 @@ def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision 
                 tool_name = tool_call.tool_name
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
-                print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{...}s")
-                marks = []
-                if pro and pro["repeats"] > 1:
-                    marks.append(f"⚠ 重复调用(第{pro['repeats']}次)")
-                if pro and pro["stalled_rounds"] > 0:
-                    marks.append(f"⚠ 连续{pro['stalled_rounds']}轮无进展")
-                if marks:
-                    print("    " + "  ".join(marks))
+                print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s")
+            marks = []
+            if pro and pro["repeats"] > 1:
+                marks.append(f"⚠ 重复调用(第{pro['repeats']}次)")
+            if pro and pro["stalled_rounds"] > 0:
+                marks.append(f"⚠ 连续{pro['stalled_rounds']}轮无进展")
+            if marks:
+                print("    " + "  ".join(marks))
         else:# FinalDecision
             print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]:.1f}s")
 
