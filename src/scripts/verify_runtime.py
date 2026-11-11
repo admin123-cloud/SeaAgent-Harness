@@ -1,7 +1,7 @@
 import sys
 import asyncio
 from bootstrap import build_deps
-from agent import AgentRuntime,OpenAICompatibleLLMAdapter,ProgressTracker
+from agent import AgentRuntime,OpenAICompatibleLLMAdapter
 from model.enums import DecisionTask
 from model.request import DecisionRequest
 from model.errors import LLMError, AgentRuntimeError,LLMOutputError
@@ -96,7 +96,8 @@ def check_history(llm:RecordingLLM, events:list[tuple[str, dict]]):
     n_result = sum(1 for t, _ in events if t == "tool_result")
     n_dec = sum(1 for d in llm.decisions if isinstance(d, ToolCallDecision))
     expect(n_call == n_result == n_dec, f"事件与决策数量不一致：call={n_call} result={n_result} decision={n_dec}")
-
+    n_progress = sum(1 for t, _ in events if t == "progress")
+    expect(n_progress == n_call, f"progress 事件数与 tool_call 事件数不一致：{n_progress} vs {n_call}")
 
 def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision | None):
     progress = {}
@@ -112,10 +113,14 @@ def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision 
                 tool_name = tool_call.tool_name
                 arguments = tool_call.arguments
                 load_ref = arguments.get("load_ref")
-                if pro is not None and pro["repeats"] > 1:
-                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s , ⚠ 重复读取")
-                if pro is not None and pro["stalled_rounds"] > 0:
-                    print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{llm.elapsed[i - 1]:.1f}s,⚠ 连续 N 轮无进展")
+                print(f"现在是第{i}轮，工具名称{tool_name}，加载路径{load_ref}，耗时{...}s")
+                marks = []
+                if pro and pro["repeats"] > 1:
+                    marks.append(f"⚠ 重复调用(第{pro['repeats']}次)")
+                if pro and pro["stalled_rounds"] > 0:
+                    marks.append(f"⚠ 连续{pro['stalled_rounds']}轮无进展")
+                if marks:
+                    print("    " + "  ".join(marks))
         else:# FinalDecision
             print(f"当前是第{i}轮. 耗时{llm.elapsed[i-1]:.1f}s")
 
