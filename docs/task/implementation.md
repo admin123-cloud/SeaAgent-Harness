@@ -196,7 +196,7 @@
 
 ### SDD-014 阶段一收尾：格式纠错重试、重复调用观测、批量统计
 
-- 状态：`IN_PROGRESS`（2026-11-11：14.2、14.3 `DONE`；14.1 待用户本地补做全包导入检查和 `--offline` 运行后关闭；14.4 批量统计、14.5 遗留小项未开始）
+- 状态：`IN_PROGRESS`（2026-11-11：14.1、14.2、14.3 `DONE`；14.4 批量统计、14.5 遗留小项未开始）
 - 背景：2026-11-03 对 `verify_runtime` 批量运行 20 次，2 次因模型输出不合法 JSON 失败（`finish_reason=stop`；一次是字符串内多出英文双引号，一次是缺少最外层右括号），都发生在读取 skill 之后的最终回答轮；该批次未出现重复读取。此前约 31 次运行中约 3 次格式失败，失败率约 10%，需要在 Harness 内兜底，并有可重复的统计手段。
 - 目标：模型输出格式失败时由 Harness 有限次纠错重试并计数；重复调用在 Harness 内可观测；`verify_runtime` 可批量运行并输出统计。
 - 非目标：
@@ -211,7 +211,7 @@
 
 | 步骤 | 类型 | 内容 | 涉及文件 | 状态 |
 | --- | --- | --- | --- | --- |
-| 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：模块级函数 `_build_message(request)`、`_parse(content, finish_reason)`，方法 `_complete(messages) -> (content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `VERIFYING` |
+| 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：模块级函数 `_build_message(request)`、`_parse(content, finish_reason)`，方法 `_complete(messages) -> (content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `DONE` |
 | 14.2 | 逻辑 | 格式纠错重试：只对解析/校验失败重试，`finish_reason == "length"` 不重试；`LLMOutputError` 增加 `attempts`；适配器记录调用/重试/格式失败计数 | `agent/openai_compatible_llm_adapter.py`、`model/errors/llm_errors.py` | `DONE` |
 | 14.3 | 逻辑 | `ProgressTracker`（只观测）：按“工具名＋规范化参数”的签名和“结果指纹”判断重复与无进展；Runtime 每轮发出 `progress` 事件；`verify_runtime.report()` 改读事件 | `agent/progress.py`、`agent/runtime.py`、`scripts/verify_runtime.py` | `DONE` |
 | 14.4 | 逻辑 | 批量统计：`verify_runtime --runs N --jsonl 路径`；每次运行立即写一行 JSON；输出汇总 | `scripts/verify_runtime.py` | `TODO` |
@@ -241,7 +241,7 @@
 
 #### 验收标准
 
-- [ ] 14.1：搬家前后 `verify_runtime`（离线和真实模型）行为一致，三项检查通过；
+- [x] 14.1（2026-11-11 通过）：搬家前后 `verify_runtime`（离线和真实模型）行为一致，三项检查通过；
 - [x] 14.2（离线，用按脚本返回的假 client，不调用真实模型；2026-11-09 通过，见验证记录）：
   - 第一次坏 JSON、第二次正确：返回决策；`create` 被调用 2 次；第二次的 `messages` 比第一次多 2 条，倒数第二条是第一次的坏输出；重试计数为 1；
   - 两次都坏：抛 `LLMOutputError`，`attempts == 2`；
@@ -273,6 +273,7 @@
 | 2026-11-11 | 14.3 | 假 LLM、真实 `AgentRuntime`/`ToolRegistry`/`ProgressTracker`，调用 `verify_runtime.report()` 与 `check_history()`，3 个场景（桩替代 `openai`、`config`、`bootstrap`） | 同调用同结果 ×3（第 2 次多一个空格）：`progress` 事件 `(round,repeats,stalled)` 为 (1,1,0)(2,2,1)(3,3,2)；两个不同 skill：(1,1,0)(2,1,0)，`report` 每轮都有输出且无告警；同调用结果变化：(1,1,0)(2,2,0)，只提示重复、不提示无进展；`progress` 事件为纯字典；`tracker` 为 `run()` 内局部变量；`check_history` 三个场景均通过；反向验证（删掉 `progress` 事件）被新增的断言检出；`report()` 已不含自带的重复判断，`ProgressTracker` 未使用的导入已删除 | **发现一处待修缺陷**：`report()` 第 116 行 `耗时{...}s` 的占位符未替换，实际输出“耗时Ellipsiss”，应为 `{llm.elapsed[i - 1]:.1f}`；告警行打印在 `for tool_call` 循环内，多工具调用的轮次会重复打印；真实模型运行、全包导入检查未执行 |
 | 2026-11-11 | 14.3 | 拉取 `a826e68`，重跑上述 3 个场景；依赖方向三条检查 | `report()` 耗时占位符已改为 `llm.elapsed[i - 1]`，输出“耗时0.1s”；告警块已移到 `for tool_call` 之外，每轮只打印一次；三个场景 `check_history` 仍通过；依赖方向检查均无输出 | 无 |
 | 2026-11-11 | 14.1 / 14.2 / 14.3 | 用户本地真实模型：`python -m scripts.verify_runtime` ×3（PowerShell） | 3 次均为 `[PASS][接线] 4 项检查通过`，随后 `check_history` 无失败输出；每次 2 轮（第 1 轮 `read_skill` 读取 `skill://kubernetes/pod-diagnosis`，第 2 轮给出 `FinalDecision`）；耗时 3.7s+7.9s、2.1s+3.2s、1.6s+4.4s；无重复调用告警、无格式失败 | 3 次样本很少，不足以评价格式失败率；格式重试次数目前不在输出中（14.4 汇总）；14.1 的全包导入检查（`python -c "import agent, tools, skills, web_app"`）和 `--offline` 运行未记录 |
+| 2026-11-11 | 14.1 | 用户本地（PowerShell）：`python -c "import agent, tools, skills, web_app; print('imports ok')"`；`python -m scripts.verify_runtime --offline`；依赖方向三条检查（Linux `grep` 等价命令） | 输出 `imports ok`；离线 `[PASS][接线] 4 项检查通过`；依赖方向检查无输出；真实模型 3 次运行见上一行记录，行为与搬家前一致 | 无 |
 
 （各步骤完成后在此追加记录。）
 
@@ -574,6 +575,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 | 2026-11-09 | SDD-013/014/015 | 同步台账：SDD-013 的 1.3、2.0、2.1 与 SDD-014 的 14.1、14.2 转 `VERIFYING`；14.3 的 `ProgressTracker` 通过离线验收，待接入 Runtime；更正 14.3 设计（递归 `strip`、不特殊处理 `read_skill`、`repeats` 首次出现计 1、实例状态）；SDD-015 裁定访问形态 A 并记录窄接口、扩展、认证与不降级约定；`CETC`/`GLM` 字样已清理 | 离线验证：假 client 与桩对象；环境缺少依赖，全包导入和 `verify_runtime` 未执行，待用户本地确认 |
 | 2026-11-11 | SDD-014 | 14.3 实现完成并通过离线验收（`ProgressTracker` 接入 `runtime.run()`，发出 `progress` 事件；`verify_runtime.report()` 改读事件，`check_history` 增加 `progress` 事件数断言）转 `VERIFYING`；记录 `report()` 一处待修缺陷；清理 `fix_registry.py` | 离线验证：假 LLM 与桩对象；全包导入和真实模型运行未执行，待用户本地确认 |
 | 2026-11-11 | SDD-014 | `report()` 缺陷修复经验证；用户本地真实模型 3 次运行通过；14.2、14.3 转 `DONE`，14.1 保持 `VERIFYING`（待全包导入检查和 `--offline` 运行） | 真实运行样本 3 次；发现最终回答质量受未注册工具影响（记入遗留风险） |
+| 2026-11-11 | SDD-014 | 14.1 补充全包导入检查和 `--offline` 运行，转 `DONE`；14.1～14.3 全部关闭，下一步 14.4 | 无新增未验证项 |
 
 ## 9. 阻塞与风险
 
