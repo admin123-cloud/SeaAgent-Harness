@@ -214,7 +214,9 @@
 | 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：模块级函数 `_build_message(request)`、`_parse(content, finish_reason)`，方法 `_complete(messages) -> (content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `DONE` |
 | 14.2 | 逻辑 | 格式纠错重试：只对解析/校验失败重试，`finish_reason == "length"` 不重试；`LLMOutputError` 增加 `attempts`；适配器记录调用/重试/格式失败计数 | `agent/openai_compatible_llm_adapter.py`、`model/errors/llm_errors.py` | `DONE` |
 | 14.3 | 逻辑 | `ProgressTracker`（只观测）：按“工具名＋规范化参数”的签名和“结果指纹”判断重复与无进展；Runtime 每轮发出 `progress` 事件；`verify_runtime.report()` 改读事件 | `agent/progress.py`、`agent/runtime.py`、`scripts/verify_runtime.py` | `DONE` |
-| 14.4 | 逻辑 | 批量统计：`verify_runtime --runs N --jsonl 路径`；每次运行立即写一行 JSON；输出汇总 | `scripts/verify_runtime.py` | `TODO` |
+| 14.4a | 搬家 | 把 `main()` 中“跑一次并收集结果”提成 `run_once(...)`，返回记录字典；输出和行为不变 | `scripts/verify_runtime.py` | `TODO` |
+| 14.4b | 逻辑 | `argparse` 解析 `--runs N`、`--jsonl 路径`、`--offline`；顺序循环；每次运行后写一行 JSON 并 `flush` | `scripts/verify_runtime.py` | `TODO` |
+| 14.4c | 逻辑 | 汇总输出（成功率、重试率、最终失败率、重复率、轮数分布、耗时分位）；**延后到第一轮现场演练之后**，以演练中确认有用的字段为准 | `scripts/verify_runtime.py` | `TODO` |
 | 14.5 | 收尾 | 遗留小项：`load_llm_settings` 调用方切换并从 `config` 导出；`pyproject.toml` 增加 `[tool.ruff.lint.per-file-ignores]` 处理 `__init__.py` 的 F401；清理临时文件和 `pip-*` 目录（根目录 `fix_registry.py` 已于 2026-11-11 删除）；适配器错误文案去掉写死的网关名称（用户已清理；2026-11-09 核对 `src` 内无 `CETC`、`GLM` 字样） | `config/`、`web_app.py`、`scripts/verify_runtime.py`、`pyproject.toml` | `TODO` |
 
 #### 设计要点
@@ -234,10 +236,12 @@
   - 事件：`progress`，字段 `round`、`repeats`、`stalled_rounds`。
 - 批量统计：
   - 顺序执行，不并发；每次运行后立即写 jsonl 并刷新，Ctrl+C 不丢已有数据；
-  - 记录字段：`run_id`、`outcome`（`ok` / `model_fail` / `wiring_fail`）、轮数、工具名列表、重复次数、格式重试次数、失败时的错误类型和 `finish_reason`、每轮耗时、总耗时；
+  - 记录字段：`run_id`、`started_at`（UTC）、`outcome`（`ok` / `model_fail` / `wiring_fail`）、`error_type`、`finish_reason`、`error_summary`（仅位置和类型）、`rounds`、`tool_names`（只记工具名）、`repeats_max`、`stalled_max`（取自 `progress` 事件）、`format_decisions` / `format_retried` / `format_failed`（取自本次 adapter 的 `stats`）、`round_seconds`、`total_seconds`；
+  - 每次运行新建 adapter 并在 `finally` 中关闭，使 `stats` 按单次运行统计；单次运行失败（任何类型）不终止整个批量；
+  - 文件只打开一次（追加模式），必须显式 `encoding="utf-8"`（Windows PowerShell 默认编码不是 UTF-8）；
   - 汇总：成功率、重试率（至少重试一次的运行占比）、最终失败率、重复率、轮数分布、耗时 p50/p95；统计写成 `k/N`，N 小于 30 时标注“样本少”；
-  - jsonl 不包含请求上下文和模型原始输出；
-  - 退出码：存在接线失败返回 1，否则 0；模型侧失败率只报告，不断言（CLAUDE.md §8）。
+  - jsonl 不包含请求上下文、模型原始输出（`raw_preview`、`raw_tail`）、模型结论文本和工具参数；
+  - 退出码：存在接线失败返回 1，否则 0；`--runs 1` 时保持现状（模型侧失败返回 2）；模型侧失败率只报告，不断言（CLAUDE.md §8）。
 
 #### 验收标准
 
@@ -258,7 +262,8 @@
   - 改变 `call_id`、`elapsed_ms` 不改变指纹；
   - 加入 `progress` 事件后，`check_history` 的断言仍全部通过；
   - `verify_runtime.report()` 不再自带重复判断逻辑；
-- [ ] 14.4：`--runs 1` 的输出与现在基本一致；jsonl 共 N 行且每行可被 `json.loads` 解析；汇总数字与手工统计 jsonl 一致；运行中途 Ctrl+C 后 jsonl 仍合法；jsonl 中无密钥和请求内容；
+- [ ] 14.4a：`run_once` 提取后，真实模型和 `--offline` 的输出与提取前一致；
+- [ ] 14.4b / 14.4c：`--runs 1` 的输出与现在基本一致；jsonl 共 N 行且每行可被 `json.loads` 解析；汇总数字（14.4c）与手工统计 jsonl 一致；运行中途 Ctrl+C 后 jsonl 仍合法；jsonl 中无密钥和请求内容；
 - [ ] 14.5：全包导入检查、`ruff check src --select F,E9`、`pyright src` 无新增问题。
 
 #### 验证记录
@@ -404,6 +409,23 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 - 模式脱敏存在漏网和误伤，需要靠精确匹配层和数据最小化补强，并在演练中持续补充用例；
 - 日志和事件属于不可信内容，提示词约束不能保证模型不被诱导，因此安全依赖工具只读和注册白名单。
 
+#### 现场问题记录（现场循环）
+
+每个演练场景按“造故障 → 人工诊断（记录命令和关键信息，作为工具和 skill 的依据）→ 运行 Agent，看事件和 jsonl → 给缺口归类 → 只修一个缺口 → 再运行”推进。缺口分四类：
+
+| 归类 | 表现 | 修复位置 |
+| --- | --- | --- |
+| 缺工具 | 模型想调用但没有，只能列出“所需工具” | `tools/` 新增只读工具 |
+| skill 不对 | 有工具但手册引导有误 | skill 的 `SKILL.md` |
+| 模型判断 | 数据齐全但结论偏离 | 提示词或评估，不改代码 |
+| Harness | 重复调用、格式失败、截断、超时 | Runtime、适配器 |
+
+| 日期 | 场景 | 现象 | 归类 | 修复 | 防复发 |
+| --- | --- | --- | --- | --- | --- |
+| 2026-11-11 | 无（真实运行 `read_skill` ×3） | 第 2 轮回答“需要更多信息、所需工具为 k8s_*”；其中 2 次 `confidence=1.0` | 缺工具 | 待 SDD-015 注册只读工具 | `confidence` 不作判断依据 |
+
+（演练开始后在此追加。）
+
 ### SDD-016 凭据库与连接目标（阶段二切片二）
 
 - 状态：`TODO`
@@ -529,12 +551,14 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 
 ## 7. 近期执行顺序
 
-> 2026-11-05 起的当前执行顺序（优先于下方历史条目）：
+> 2026-11-12 起的当前执行顺序（现场驱动，优先于下方历史条目）：
 >
-> 1. **SDD-014** 阶段一收尾：14.1 搬家 → 14.2 纠错重试 → 14.3 重复调用观测 → 14.4 批量统计 → 14.5 遗留小项；
-> 2. **SDD-015** 切片一：15.0 设计评审 → 15.1 配置 → 15.2 脱敏 → 15.3～15.6 四个只读工具 → 15.7 不可信内容约束 → 15.8 故障演练与统计；
-> 3. **SDD-016** 切片二：凭据库与连接目标；
-> 4. **SDD-017** 切片三：服务器只读诊断工具。
+> 1. **SDD-014**：14.4a 提取 `run_once` → 14.4b `--runs` 与 jsonl；汇总（14.4c）和 14.5 延后到第一轮演练之后；
+> 2. **SDD-015**：15.0 专用只读账号（与上一步并行，由用户在测试集群操作）→ 15.1 配置 → 15.2 脱敏 → 15.3 `k8s_list_pods` → **第一轮 CrashLoop 演练（现场循环）** → 15.4～15.7 → 15.8；
+> 3. **SDD-016** 凭据库与连接目标；
+> 4. **SDD-017** 服务器只读诊断工具。
+>
+> 约束：15.2 脱敏完成之前，Agent 不接入真实集群输出（用户可自行用 `kubectl` 观察现场）。
 >
 > 说明：下方 SDD-013 等历史条目的状态尚未与代码现状同步，待下一次文档同步统一更新（见变更记录）。
 
@@ -576,6 +600,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 | 2026-11-11 | SDD-014 | 14.3 实现完成并通过离线验收（`ProgressTracker` 接入 `runtime.run()`，发出 `progress` 事件；`verify_runtime.report()` 改读事件，`check_history` 增加 `progress` 事件数断言）转 `VERIFYING`；记录 `report()` 一处待修缺陷；清理 `fix_registry.py` | 离线验证：假 LLM 与桩对象；全包导入和真实模型运行未执行，待用户本地确认 |
 | 2026-11-11 | SDD-014 | `report()` 缺陷修复经验证；用户本地真实模型 3 次运行通过；14.2、14.3 转 `DONE`，14.1 保持 `VERIFYING`（待全包导入检查和 `--offline` 运行） | 真实运行样本 3 次；发现最终回答质量受未注册工具影响（记入遗留风险） |
 | 2026-11-11 | SDD-014 | 14.1 补充全包导入检查和 `--offline` 运行，转 `DONE`；14.1～14.3 全部关闭，下一步 14.4 | 无新增未验证项 |
+| 2026-11-12 | 路线调整 | 开发改为现场驱动：14.4 拆为 14.4a/b/c（汇总延后）；15.0 与 14.4 并行；新增“现场问题记录”和四类缺口归类；15.2 完成前 Agent 不接真实集群输出；DEVELOPMENT_GUIDE 增加现场循环与原理锚点 | 仅文档变更，代码未改动 |
 
 ## 9. 阻塞与风险
 
