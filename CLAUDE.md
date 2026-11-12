@@ -13,6 +13,7 @@
 | `docs/task/implementation.md` | 可执行任务、状态、依赖和验证记录 | 每次任务开始、完成或阻塞时 |
 | `README.md` | 面向使用者的运行和能力说明 | 用户可见用法发生变化时 |
 | `docs/DEVELOPMENT_GUIDE.md` | 学习型协作节奏和角色分工 | 协作方式发生变化时 |
+| `docs/INTERVIEW_GUIDE.md` | 大模型应用开发面试要点、追问和红旗（唯一维护位置） | 出现新的考点或项目现象时 |
 
 需求以 `docs/PRD.md` 为产品层事实来源，任务以 `docs/task/implementation.md` 为执行层事实来源。代码、配置和运行结果必须与两者保持一致。出现冲突时，先记录冲突，再按“用户明确要求 > 已批准需求 > 当前任务验收标准 > 本文件工程规则”的顺序处理。
 
@@ -61,6 +62,7 @@ docs/PRD.md                   产品需求规格
 docs/task/implementation.md  任务拆解和状态跟踪
 README.md                      运行说明和对外能力概览
 docs/DEVELOPMENT_GUIDE.md      学习型协作与 Review 约定
+docs/INTERVIEW_GUIDE.md        面试要点与追问题库
 ```
 
 生成目录（如 `.venv`、`node_modules`、`dist`、`__pycache__`）不作为规范或源码修改目标，除非任务明确要求处理构建产物。
