@@ -1,13 +1,13 @@
 import sys
 import asyncio
-
-from agent.run_out_come import run_once,RecordingLLM
 from bootstrap import build_deps
 from model.enums import DecisionTask
 from model.request import DecisionRequest
-from model.models import FinalDecision,ToolCallDecision
+from model.models import FinalDecision,ToolCallDecision,ToolCall
+from .run_once import RecordingLLM,run_once
 
 EXIT_OK, EXIT_WIRING, EXIT_MODEL = 0, 1, 2
+
 
 def expect(cond: bool, msg: str) -> None:
     if not cond:
@@ -74,8 +74,61 @@ def report(llm:RecordingLLM, events:list[tuple[str, dict]],result:FinalDecision 
         print(f"{rt.summary[:200]}")
         print(f"findings={len(rt.findings)}  recommendations={len(rt.recommendations)}  confidence={rt.confidence}")
 
+
+async def check_wiring(deps):
+    """ A层 检查skill和tool 读取和使用是否正常 """
+    # A1.断言read_skill 已注册
+    tool_name = []
+    for tool_spec in deps.tool_registry.list_specs():
+        tool_name.append(tool_spec.name)
+
+    expect("read_skill" in tool_name, "检查tool工具异常，未发现内置工具read_skill")
+
+    # A2.断言skill目录合理
+    skill_ids = []
+    for summary in deps.skill_registry.summaries():
+        skill_ids.append(summary.skill_id)
+
+    bad = [i for i in skill_ids if i.startswith(("builtin/", "buildin/"))]
+    expect(not bad, f"skill_id 带了不该有的前缀：{bad}")
+    expect("sre/incident-triage" in skill_ids, "默认事件检查skill：incident-triage，未注册")
+
+    # A3.能读取到存在的skill
+    call = ToolCall(
+        call_id="wiring-1",
+        tool_name="read_skill",
+        arguments={"load_ref": "skill://sre/incident-triage"}
+    )
+    result = await deps.tool_registry.execute(call)
+    expect(result.success, "调用工具失败")
+    expect(result.data.get("skill_id") == "sre/incident-triage", "read_skill 返回的 skill_id 与请求不一致")
+
+    # A4.读不存在的skill会失败而不会崩溃
+    call = ToolCall(
+        call_id="wiring-2",
+        tool_name="read_skill",
+        arguments={"load_ref": "skill://no-such/skill"}
+    )
+    result = await deps.tool_registry.execute(call)
+    expect(result.success is False, "读取不存在的 skill 应该失败")
+    expect(result.error_type is not None, "失败时 error_type 不能是 None")
+
+
 async def main() -> int:
+    offline = "--offline" in sys.argv
     deps = build_deps()
+
+    # A 层
+    try:
+        await check_wiring(deps)
+    except AssertionError as e:
+        print(f"[FAIL][接线] {e}")
+        return EXIT_WIRING
+    print("[PASS][接线] 4 项检查通过")
+    if offline:
+        return EXIT_OK
+    deps = build_deps()
+
 
     # B 层
     request = DecisionRequest(

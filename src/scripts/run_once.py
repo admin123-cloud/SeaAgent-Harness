@@ -1,19 +1,15 @@
-import sys
 from bootstrap import AgentDeps
 from dataclasses import dataclass
-from time import perf_counter
 from config import LLMSettings
 from model.request import DecisionRequest
-from model.models import FinalDecision,ToolCall
+from model.models import FinalDecision
 from agent import AgentRuntime,OpenAICompatibleLLMAdapter
 from model.errors import LLMError, AgentRuntimeError,LLMOutputError
+from time import perf_counter
 
 
 EXIT_OK, EXIT_WIRING, EXIT_MODEL = 0, 1, 2
 
-def expect(cond: bool, msg: str) -> None:
-    if not cond:
-        raise AssertionError(msg)
 
 class RecordingLLM:
     def __init__(self, inner):
@@ -30,65 +26,15 @@ class RecordingLLM:
         self.decisions.append(decision)
         return decision
 
-async def check_wiring(deps):
-    """ A层 检查skill和tool 读取和使用是否正常 """
-    # A1.断言read_skill 已注册
-    tool_name = []
-    for tool_spec in deps.tool_registry.list_specs():
-        tool_name.append(tool_spec.name)
-
-    expect("read_skill" in tool_name, "检查tool工具异常，未发现内置工具read_skill")
-
-    # A2.断言skill目录合理
-    skill_ids = []
-    for summary in deps.skill_registry.summaries():
-        skill_ids.append(summary.skill_id)
-
-    bad = [i for i in skill_ids if i.startswith(("builtin/", "buildin/"))]
-    expect(not bad, f"skill_id 带了不该有的前缀：{bad}")
-    expect("sre/incident-triage" in skill_ids,"默认事件检查skill：incident-triage，未注册")
-
-    # A3.能读取到存在的skill
-    call = ToolCall(
-        call_id="wiring-1",
-        tool_name="read_skill",
-        arguments={"load_ref": "skill://sre/incident-triage"}
-    )
-    result = await deps.tool_registry.execute(call)
-    expect(result.success,"调用工具失败")
-    expect(result.data.get("skill_id") == "sre/incident-triage","read_skill 返回的 skill_id 与请求不一致")
-
-    # A4.读不存在的skill会失败而不会崩溃
-    call = ToolCall(
-        call_id="wiring-2",
-        tool_name="read_skill",
-        arguments={"load_ref": "skill://no-such/skill"}
-    )
-    result = await deps.tool_registry.execute(call)
-    expect(result.success is False, "读取不存在的 skill 应该失败")
-    expect(result.error_type is not None, "失败时 error_type 不能是 None")
 
 @dataclass
 class RunOutcome:
-    llm: RecordingLLM | None
+    llm: RecordingLLM
     events: list[tuple[str, dict[str, object]]]
     result: FinalDecision | None
     exit_code: int
 
 async def run_once(deps:AgentDeps, request: DecisionRequest) -> RunOutcome:
-    offline = "--offline" in sys.argv
-
-    # A 层
-    try:
-        await check_wiring(deps)
-    except AssertionError as e:
-        print(f"[FAIL][接线] {e}")
-        return RunOutcome(llm=None, events=[], result=None, exit_code=EXIT_WIRING)
-
-    print("[PASS][接线] 4 项检查通过")
-    if offline:
-        return RunOutcome(llm=None, events=[], result=None, exit_code=EXIT_OK)
-
     # B 层
     adapter = OpenAICompatibleLLMAdapter(LLMSettings())
     llm = RecordingLLM(adapter)
