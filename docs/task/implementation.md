@@ -214,7 +214,7 @@
 | 14.1 | 搬家 | 拆分 `OpenAICompatibleLLMAdapter.decide`：模块级函数 `_build_message(request)`、`_parse(content, finish_reason)`，方法 `_complete(messages) -> (content, finish_reason)`；行为不变 | `agent/openai_compatible_llm_adapter.py` | `DONE` |
 | 14.2 | 逻辑 | 格式纠错重试：只对解析/校验失败重试，`finish_reason == "length"` 不重试；`LLMOutputError` 增加 `attempts`；适配器记录调用/重试/格式失败计数 | `agent/openai_compatible_llm_adapter.py`、`model/errors/llm_errors.py` | `DONE` |
 | 14.3 | 逻辑 | `ProgressTracker`（只观测）：按“工具名＋规范化参数”的签名和“结果指纹”判断重复与无进展；Runtime 每轮发出 `progress` 事件；`verify_runtime.report()` 改读事件 | `agent/progress.py`、`agent/runtime.py`、`scripts/verify_runtime.py` | `DONE` |
-| 14.4a | 搬家 | 把 `main()` 中“跑一次并收集结果”提成 `run_once(...)`，返回记录字典；输出和行为不变 | `scripts/verify_runtime.py` | `TODO` |
+| 14.4a | 搬家 | 把 `main()` 中“跑一次并收集结果”提成 `run_once(...)`，返回 `RunOutcome`（数据类：llm、events、result、exit_code）；输出和行为不变 | `scripts/run_once.py`、`scripts/verify_runtime.py` | `VERIFYING` |
 | 14.4b | 逻辑 | `argparse` 解析 `--runs N`、`--jsonl 路径`、`--offline`；顺序循环；每次运行后写一行 JSON 并 `flush` | `scripts/verify_runtime.py` | `TODO` |
 | 14.4c | 逻辑 | 汇总输出（成功率、重试率、最终失败率、重复率、轮数分布、耗时分位）；**延后到第一轮现场演练之后**，以演练中确认有用的字段为准 | `scripts/verify_runtime.py` | `TODO` |
 | 14.5 | 收尾 | 遗留小项：`load_llm_settings` 调用方切换并从 `config` 导出；`pyproject.toml` 增加 `[tool.ruff.lint.per-file-ignores]` 处理 `__init__.py` 的 F401；清理临时文件和 `pip-*` 目录（根目录 `fix_registry.py` 已于 2026-11-11 删除）；适配器错误文案去掉写死的网关名称（用户已清理；2026-11-09 核对 `src` 内无 `CETC`、`GLM` 字样） | `config/`、`web_app.py`、`scripts/verify_runtime.py`、`pyproject.toml` | `TODO` |
@@ -279,6 +279,7 @@
 | 2026-11-11 | 14.3 | 拉取 `a826e68`，重跑上述 3 个场景；依赖方向三条检查 | `report()` 耗时占位符已改为 `llm.elapsed[i - 1]`，输出“耗时0.1s”；告警块已移到 `for tool_call` 之外，每轮只打印一次；三个场景 `check_history` 仍通过；依赖方向检查均无输出 | 无 |
 | 2026-11-11 | 14.1 / 14.2 / 14.3 | 用户本地真实模型：`python -m scripts.verify_runtime` ×3（PowerShell） | 3 次均为 `[PASS][接线] 4 项检查通过`，随后 `check_history` 无失败输出；每次 2 轮（第 1 轮 `read_skill` 读取 `skill://kubernetes/pod-diagnosis`，第 2 轮给出 `FinalDecision`）；耗时 3.7s+7.9s、2.1s+3.2s、1.6s+4.4s；无重复调用告警、无格式失败 | 3 次样本很少，不足以评价格式失败率；格式重试次数目前不在输出中（14.4 汇总）；14.1 的全包导入检查（`python -c "import agent, tools, skills, web_app"`）和 `--offline` 运行未记录 |
 | 2026-11-11 | 14.1 | 用户本地（PowerShell）：`python -c "import agent, tools, skills, web_app; print('imports ok')"`；`python -m scripts.verify_runtime --offline`；依赖方向三条检查（Linux `grep` 等价命令） | 输出 `imports ok`；离线 `[PASS][接线] 4 项检查通过`；依赖方向检查无输出；真实模型 3 次运行见上一行记录，行为与搬家前一致 | 无 |
+| 2026-11-13 | 14.4a | 拉取 `b498827`：静态检查 `scripts/run_once.py`、`verify_runtime.py`（`py_compile`）；依赖方向 `grep -rn "bootstrap\|run_out_come\|RecordingLLM" src/agent`；`agent/__init__.py` 导出检查 | 首版（`e97686d`）把 `check_wiring`、`RecordingLLM`、`run_once` 放进 `agent/` 并 `from bootstrap import`，违反包依赖方向；用户修正后 `RecordingLLM`/`RunOutcome`/`run_once` 在 `scripts/run_once.py`，`agent/` 无 `bootstrap` 引用和测试代码，接线检查与 `--offline` 回到 `main()`；用户反向验证（错误密钥）得到 `[FAIL][模型侧] LLMAuthenticationError` | 修正后的真实模型成功运行与错误密钥时 `$LASTEXITCODE`（应为 2）尚无用户贴出；`main()` 中残留重复的 `deps = build_deps()` 与已成死代码的 `if outcome.llm is not None`，并入 14.4b 清理 |
 
 （各步骤完成后在此追加记录。）
 
@@ -287,6 +288,7 @@
 - 轮询类调用（同一工具、结果在变化）只计入 `repeats`，不计入无进展；批量数据积累后再决定是否对 `repeats` 设阈值（PRD 待决策第 12 项）。
 - `progress` 事件的 `repeats` 是一轮内所有调用的最大值，一轮多个调用时无法定位是哪一个重复；目前只做轮级观测。
 - 2026-11-11 真实运行 3 次：第 2 轮的最终回答是“需要更多信息/列出所需工具”而非诊断，且其中 2 次 `confidence` 为 1.0。原因是 `pod-diagnosis` 引用的 `k8s_*` 工具尚未注册（见 SDD-013 遗留风险、SDD-015）；同时说明模型自报的 `confidence` 不可靠，不应作为判断依据。
+- **异常信息回显网关原文（2026-11-13，用户裁定延后处理）**：适配器把 `{exc}` 拼进 `LLMAuthenticationError` 等异常信息；网关的 401 正文会回显 API Key 片段和 Key Hash，并被 `verify_runtime` 打印。处理方式为只取白名单字段（`status_code` 与网关的 `type`/`code`）并使用固定文案，覆盖 Timeout/Auth/RateLimit/Connection 四处。用户要求先快速跑通，改到后面做；**解除条件**：在 jsonl 落盘（14.4b）之前至少保证 jsonl 只写异常类型和状态码、不写异常信息文本；其余在阶段二收尾前统一改。
 - 20 次样本不足以判断某项改动是否降低了失败率；以重试率（`attempts > 1` 的占比）的长期积累作为依据。
 - 网关是否支持 JSON 模式或 `json_schema` 尚未验证；确认后作为独立实验任务登记。
 - 最坏情况下一轮的耗时可达数分钟，Web 工作台仍是同步执行，需要在进入真实诊断前异步化（见 SDD-015 的前置条件）。
@@ -601,6 +603,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 | 2026-11-11 | SDD-014 | `report()` 缺陷修复经验证；用户本地真实模型 3 次运行通过；14.2、14.3 转 `DONE`，14.1 保持 `VERIFYING`（待全包导入检查和 `--offline` 运行） | 真实运行样本 3 次；发现最终回答质量受未注册工具影响（记入遗留风险） |
 | 2026-11-11 | SDD-014 | 14.1 补充全包导入检查和 `--offline` 运行，转 `DONE`；14.1～14.3 全部关闭，下一步 14.4 | 无新增未验证项 |
 | 2026-11-12 | 路线调整 | 开发改为现场驱动：14.4 拆为 14.4a/b/c（汇总延后）；15.0 与 14.4 并行；新增“现场问题记录”和四类缺口归类；15.2 完成前 Agent 不接真实集群输出；DEVELOPMENT_GUIDE 增加现场循环与原理锚点 | 仅文档变更，代码未改动 |
+| 2026-11-13 | SDD-014 | 14.4a 经审查转 `VERIFYING`：搬家范围纠正（测试代码移出 `agent/`、依赖方向恢复）；异常信息回显网关原文登记为遗留风险并按用户要求延后 | 真实运行证据待补 |
 
 ## 9. 阻塞与风险
 
