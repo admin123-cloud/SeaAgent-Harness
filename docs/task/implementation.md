@@ -312,8 +312,10 @@
 
 | 步骤 | 内容 | 涉及文件 | 状态 |
 | --- | --- | --- | --- |
-| 15.0 | 设计评审：Kubernetes 访问形态已于 2026-11-09 裁定（见下方“已裁定”）；仍需为测试集群创建专用只读账号、记录验证命令输出 | 本文档 | `IN_PROGRESS` |
-| 15.1 | 配置：`K8S_API_SERVER`、`K8S_TOKEN`（`SecretStr`）、`K8S_CA_FILE`、`K8S_ALLOWED_NAMESPACES`；未配置则不注册 K8s 工具；只配置了一部分则启动失败；TLS 校验必须开启 | `config/`、`bootstrap.py` | `TODO` |
+| 15.0 | 设计评审：Kubernetes 访问形态已于 2026-11-09 裁定（见下方“已裁定”）；专用只读账号与 RBAC 已于 2026-11-13 创建并验证（见验证记录）；token 签发和连通性验证随 15.1b 的连接页面进行，不再用 `curl.exe` 模拟 | 本文档 | `DONE` |
+| 15.1a | `K8sReadClient`（`httpx` 直连，仅 GET；方法 `list_pods`、`get_pod`、`list_events`、`get_pod_log`）；连接超时、证书校验失败、401、403 映射为四种不同异常，异常信息不含 token | `tools/k8s_client.py`、`model/errors/` | `TODO` |
+| 15.1b | 连接页面（用户 2026-11-13 提出，替代 curl 验证）：Web 工作台增加“集群连接”表单（API Server、CA、token）和“测试连接”按钮；后端只返回成功或失败及错误类别，不回显 token；结果只显示给操作者，不经过模型；仅回环地址、POST、校验 `Host`/`Origin`；token 暂存 `.sre-agent-data/secrets/`（过渡方案，SDD-016 替换为加密存储） | `web_app.py`、`config/` | `TODO` |
+| 15.1c | 配置读取：`K8S_API_SERVER`、token 文件、`K8S_CA_FILE`、`K8S_ALLOWED_NAMESPACES`；未配置则不注册 K8s 工具；只配置了一部分则启动失败；TLS 校验必须开启 | `config/`、`bootstrap.py` | `TODO` |
 | 15.2 | 输出脱敏模块：模式脱敏和“已知秘密精确匹配”两层，接入 `ToolRegistry.execute`，使任何工具都无法绕过 | `tools/redaction.py`、`tools/registry.py` | `TODO` |
 | 15.3 | `k8s_list_pods` | `tools/kubernetes.py` | `TODO` |
 | 15.4 | `k8s_describe_pod`（摘要化输出，不含环境变量值）；工具异常信息脱敏后再进入 `summary`（原 SDD-013 的 2.3） | `tools/kubernetes.py`、`tools/registry.py` | `TODO` |
@@ -404,8 +406,15 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 - [ ] README 的能力列表与实际工具一致；PRD FR-002 的验收标准与实现一致；
 - [ ] 全包导入、依赖方向、`verify_runtime`、`ruff`、`pyright` 检查通过。
 
+#### 验证记录
+
+| 日期 | 步骤 | 命令 | 结果摘要 | 未验证项 |
+| --- | --- | --- | --- | --- |
+| 2026-11-13 | 15.0 | 用户在测试集群 master 上执行：`kubectl create namespace sre-drill`；创建 ServiceAccount `sre-agent-reader`；`kubectl create rolebinding … --clusterrole=view --serviceaccount=sre-drill:sre-agent-reader -n sre-drill`；`kubectl auth can-i … --as=system:serviceaccount:sre-drill:sre-agent-reader` 共 8 项 | 期望为 yes 的 3 项全为 yes：`list pods`、`get pods/log`、`list events`（`-n sre-drill`）；期望为 no 的 5 项全为 no：`get secrets`、`create pods`、`delete pods`（`-n sre-drill`）、`list pods -n kube-system`、`list nodes`。输出由用户粘贴，助手未直接执行 | token 尚未签发；Harness 所在机器到 API Server 的连通性、TLS 校验、401/403 的区分，留给 15.1a/15.1b 的“测试连接”验证；`view` 角色比“读 Pod、日志、事件”宽（含 ConfigMap 等），是否收窄为自定义 Role 待评估 |
+
 #### 遗留风险
 
+- `view` 角色的读权限比切片一所需更宽（含 ConfigMap、Deployment 等）；15.2 脱敏完成前不得把这些内容送入模型，第二切片评估自定义 Role；
 - 测试集群与真实环境的差异：演练结果不能直接代表生产表现；
 - token 到期后需要手动更换，直到 SDD-016 完成；
 - 模式脱敏存在漏网和误伤，需要靠精确匹配层和数据最小化补强，并在演练中持续补充用例；
@@ -556,7 +565,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 > 2026-11-12 起的当前执行顺序（现场驱动，优先于下方历史条目）：
 >
 > 1. **SDD-014**：14.4a 提取 `run_once` → 14.4b `--runs` 与 jsonl；汇总（14.4c）和 14.5 延后到第一轮演练之后；
-> 2. **SDD-015**：15.0 专用只读账号（与上一步并行，由用户在测试集群操作）→ 15.1 配置 → 15.2 脱敏 → 15.3 `k8s_list_pods` → **第一轮 CrashLoop 演练（现场循环）** → 15.4～15.7 → 15.8；
+> 2. **SDD-015**：15.0 专用只读账号（与上一步并行，由用户在测试集群操作）→ 15.1a K8sReadClient → 15.1b 连接页面 → 15.1c 配置 → 15.2 脱敏 → 15.3 `k8s_list_pods` → **第一轮 CrashLoop 演练（现场循环）** → 15.4～15.7 → 15.8；
 > 3. **SDD-016** 凭据库与连接目标；
 > 4. **SDD-017** 服务器只读诊断工具。
 >
@@ -604,6 +613,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 | 2026-11-11 | SDD-014 | 14.1 补充全包导入检查和 `--offline` 运行，转 `DONE`；14.1～14.3 全部关闭，下一步 14.4 | 无新增未验证项 |
 | 2026-11-12 | 路线调整 | 开发改为现场驱动：14.4 拆为 14.4a/b/c（汇总延后）；15.0 与 14.4 并行；新增“现场问题记录”和四类缺口归类；15.2 完成前 Agent 不接真实集群输出；DEVELOPMENT_GUIDE 增加现场循环与原理锚点 | 仅文档变更，代码未改动 |
 | 2026-11-13 | SDD-014 | 14.4a 经审查转 `VERIFYING`：搬家范围纠正（测试代码移出 `agent/`、依赖方向恢复）；异常信息回显网关原文登记为遗留风险并按用户要求延后 | 真实运行证据待补 |
+| 2026-11-13 | SDD-015 | 15.0 转 `DONE`（RBAC 8 项 `can-i` 验证通过）；按用户要求不再用 `curl.exe` 验证，15.1 拆为 15.1a（`K8sReadClient`）、15.1b（连接页面：保存 + 测试连接，结果只给操作者看）、15.1c（配置）；token 暂存本地文件，加密存储仍属 SDD-016 | 仅文档变更；token 未签发，连通性待 15.1b |
 
 ## 9. 阻塞与风险
 
