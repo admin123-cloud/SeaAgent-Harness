@@ -439,7 +439,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 
 | 日期 | 步骤 | 命令 | 结果摘要 | 未验证项 |
 | --- | --- | --- | --- | --- |
-| 2026-11-17 | 15.1b（本地拉起部分） | 用户在本机运行 `scripts/agent-labs/mcp-probe.py`（未推送，助手未见代码），经 MCP stdio 连接本地 `containers/kubernetes-mcp-server`（只读配置），输出由用户粘贴，内网 IP 已遮掩，助手未直接执行 | 探针打印的工具集合为 `pods_log`、`pods_get`、`events_list`、`pods_list_in_namespace`；`sre-drill` 内 `pods_list_in_namespace` 返回 1 个 Pod（`mcp-test`，`ImagePullBackOff`）；`kube-system` 列 Pod 被 RBAC 拒绝（错误文本含 ServiceAccount 全名）；探针报告无 `pods_exec` 工具；`pods_get` 返回完整 Pod 对象（文本 YAML 和结构化 JSON 各一份），**环境变量值以明文返回**（测试用的无害值），状态消息中含内网 DNS 地址和镜像仓库域名 | 打印的集合是否为 `list_tools` 原始返回（而非白名单常量）；工具定义哈希；真实调用 `pods_exec` 的拒绝文案；TOML 中 `read_only`、`toolsets`、`enabled_tools` 的实际取值；token 是否出现在探针输出和日志中；均未见输出 |
+| 2026-11-17 | 15.1b（本地拉起部分） | 用户在本机运行 `scripts/agent-labs/mcp-probe.py`（提交 243504a；助手读过脚本），经 MCP stdio 连接本地 `containers/kubernetes-mcp-server`（只读配置），输出由用户粘贴，内网 IP 已遮掩，助手未直接执行 | 探针打印的工具集合为 `pods_log`、`pods_get`、`events_list`、`pods_list_in_namespace`；`sre-drill` 内 `pods_list_in_namespace` 返回 1 个 Pod（`mcp-test`，`ImagePullBackOff`）；`kube-system` 列 Pod 被 RBAC 拒绝（错误文本含 ServiceAccount 全名）；探针报告无 `pods_exec` 工具；`pods_get` 返回完整 Pod 对象（文本 YAML 和结构化 JSON 各一份），**环境变量值以明文返回**（测试用的无害值），状态消息中含内网 DNS 地址和镜像仓库域名 | 工具定义哈希（脚本只取名称，未计算）；真实调用 `pods_exec` 的拒绝文案；TOML 中 `read_only`、`toolsets`、`enabled_tools` 的实际取值；token 是否出现在探针输出和日志中；均未见输出 |
 | 2026-11-16 | 选型 | 助手在云端容器执行 `git clone --depth 1` 三个公开仓库；阅读 `README.md`、`docs/configuration.md`，并检查 `pkg/toolsets/core/*.go` 中的 `ReadOnlyHint` 注解；`grep` 另两个仓库 README 的只读相关描述 | 候选一为 Go 原生实现，有 `read_only`、`enabled_tools`、`denied_resources`，文档声明这些只是尽力护栏；候选二依赖 `kubectl` 且无真正只读模式；候选三依赖 `kubectl` 且以命令字符串调用 | 未运行任何二进制；未在 Windows 上验证；未核对发布页校验和；`pods_get` 等工具的实际输出格式（是否含环境变量值）未验证；`read_only` 和 `enabled_tools` 的实际行为未实测；README 中的工具参数以 15.1a 的 `list_tools` 为准 |
 | 2026-11-13 | 15.0 | 用户在测试集群 master 上执行：`kubectl create namespace sre-drill`；创建 ServiceAccount `sre-agent-reader`；`kubectl create rolebinding … --clusterrole=view --serviceaccount=sre-drill:sre-agent-reader -n sre-drill`；`kubectl auth can-i … --as=system:serviceaccount:sre-drill:sre-agent-reader` 共 8 项 | 期望为 yes 的 3 项全为 yes：`list pods`、`get pods/log`、`list events`（`-n sre-drill`）；期望为 no 的 5 项全为 no：`get secrets`、`create pods`、`delete pods`（`-n sre-drill`）、`list pods -n kube-system`、`list nodes`。输出由用户粘贴，助手未直接执行 | token 尚未签发；Harness 所在机器到 API Server 的连通性、TLS 校验、401/403 的区分，留给 15.1a/15.1b 的“测试连接”验证；`view` 角色比“读 Pod、日志、事件”宽（含 ConfigMap 等），是否收窄为自定义 Role 待评估 |
 
@@ -651,7 +651,7 @@ Kubernetes 访问形态（用户同意首选 A；备选的比较保留如下）�
 | 2026-11-13 | SDD-014 | 14.4a 经审查转 `VERIFYING`：搬家范围纠正（测试代码移出 `agent/`、依赖方向恢复）；异常信息回显网关原文登记为遗留风险并按用户要求延后 | 真实运行证据待补 |
 | 2026-11-13 | SDD-015 | 15.0 转 `DONE`（RBAC 8 项 `can-i` 验证通过）；按用户要求不再用 `curl.exe` 验证，15.1 拆为 15.1a（`K8sReadClient`）、15.1b（连接页面：保存 + 测试连接，结果只给操作者看）、15.1c（配置）；token 暂存本地文件，加密存储仍属 SDD-016 | 仅文档变更；token 未签发，连通性待 15.1b |
 | 2026-11-16 | SDD-015 | 方向调整（用户裁定）：不再手写 Kubernetes 接口，改为 MCP 客户端接入开源 server，选型 `containers/kubernetes-mcp-server`；15.1a/b/c 重定义为 Tool 抽象与 MCP 适配、本地拉起与连接页面、配置；15.3 `CANCELLED`；15.4～15.6 改为白名单暴露加结果管道；新增选型记录、三层只读约定和相关遗留风险；运行时自造工具暂不排入计划 | 仅文档变更，未改代码；选型依据见验证记录（未运行二进制）；PRD FR-002 与决策记录（2026-11-09 条）待同步 |
-| 2026-11-17 | SDD-015 | 登记本地探针的验证记录：只读集合、RBAC 越权被拒、`pods_get` 返回环境变量明文；补充选型记录的多集群说明；15.4 的裁剪方向改为基于实测 | 仅文档变更；探针代码未推送，结果为用户粘贴，助手未执行 |
+| 2026-11-17 | SDD-015 | 登记本地探针的验证记录：只读集合、RBAC 越权被拒、`pods_get` 返回环境变量明文；补充选型记录的多集群说明；15.4 的裁剪方向改为基于实测 | 仅文档变更；探针脚本已推送（243504a），结果为用户粘贴，助手未执行；脚本 `print(os.environ)` 会把全部环境变量打到终端，且把整份环境传给子进程，需在 15.1a 改为最小环境变量 |
 
 ## 9. 阻塞与风险
 
