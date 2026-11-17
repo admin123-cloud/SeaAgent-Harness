@@ -127,7 +127,6 @@ async def main() -> int:
     print("[PASS][接线] 4 项检查通过")
     if offline:
         return EXIT_OK
-    deps = build_deps()
 
 
     # B 层
