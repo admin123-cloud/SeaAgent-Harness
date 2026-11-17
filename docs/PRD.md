@@ -161,7 +161,7 @@ Agent 在配置的 `WORKSPACE_ROOT` 内列举、读取和搜索文本文件，�
 
 系统必须支持读取 allowlist namespace 内的 Pod 列表、单 Pod 描述、Pod 日志和最近事件。
 
-**验收标准**：namespace 和资源名经过校验；请求设置超时（采用子进程形态时同时设置进程超时）；失败保留可诊断的错误信息且不含凭据；日志和事件有结果上限；Agent 使用专用只读账号运行，不提供重启或修改资源的接口；输出按 FR-017 脱敏；错误能区分连接超时、证书校验失败、401 和 403。实现形态已裁定为 `httpx` 直连 API Server，任务拆分见 [SDD-015](task/implementation.md)。
+**验收标准**：namespace 和资源名经过校验；请求设置超时（经 MCP 接入时同时设置调用超时和 server 进程生命周期管理）；失败保留可诊断的错误信息且不含凭据；日志和事件有结果上限；Agent 使用专用只读账号运行，不提供重启或修改资源的接口；输出按 FR-017 脱敏；错误能区分连接超时、证书校验失败、401 和 403；只读以集群 RBAC 为权威保证，server 护栏和 Harness 白名单、工具定义哈希基线为辅助层，不依赖 server 自报的 `readOnlyHint`。实现形态已于 2026-11-16 改为经 MCP 接入开源 Kubernetes server（见“已决策”），任务拆分见 [SDD-015](task/implementation.md)。
 
 ### FR-003 Jenkins 只读工具
 
@@ -371,7 +371,7 @@ V0.1 基础层完成需要同时满足：
 - 2026-11-05：凭据库采用“只写不读”的加密存储；主密钥位于 `.sre-agent-data/secrets/master.key` 并在启动时加载；凭据与连接目标分开；复用 SQLite（FR-018，SDD-016）。
 - 2026-11-05：阶段二按切片推进——先做只读 Kubernetes 工具与脱敏（SDD-015，凭据暂从本地配置读取），再做凭据库（SDD-016），最后做服务器只读工具（SDD-017）。切片一采用“直接 ToolRegistry 注册”的形态，仅作为 SDD-002 解除条件之一的落地，不改变 SDD-002 的暂缓状态。
 - 2026-11-05：练手环境为专用测试集群（原生 Kubernetes 1.32.x），允许制造故障；Agent 仍使用专用只读账号，不使用管理员凭据。
-- 2026-11-09：Kubernetes 访问形态首选 `httpx` 直连 API Server（只读 GET）；工具层使用只有 4 个只读方法的窄接口 `K8sReadClient`；官方 `kubernetes` 客户端和其他类型的集群以后作为扩展实现，仅运维显式启用、不由模型触发，且同样经过 `ToolRegistry`；切片一仅支持 Bearer token，用户名密码不适用于原生 Kubernetes（1.19 起移除 basic auth），明确报错，不自动降级为 SSH 后执行 kubectl（FR-002、FR-018，SDD-015）。
+- 2026-11-16（取代 2026-11-09 的 `httpx` 直连决策）：Kubernetes 能力经 MCP client 接入开源 server（选型 `containers/kubernetes-mcp-server`，本地固定版本部署，stdio 传输），Harness 不再手写 Kubernetes 接口；Harness 负责工具抽象（来源 `builtin|mcp`）、白名单、工具定义哈希基线、参数校验、结果脱敏与摘要；运行时自生成工具不在当前计划内，仅保留来源 `generated` 的预留且默认不可信；V0.1 只读，由集群 RBAC、server 护栏、Harness 白名单三层保证；仍仅支持 Bearer token 的专用只读账号，不自动降级为 SSH 后执行 kubectl；多集群目标管理由 SDD-016 承担，模型只见目标别名（FR-002、FR-018，SDD-015）。2026-11-09 的 `K8sReadClient` 手写客户端作为方向调整前的产物保留，不再扩展。
 - 2026-11-05：LLM 适配器暂不抽象多协议、不引入 `ProviderProfile` 或工厂，当前只保留 OpenAI 兼容协议；格式纠错重试属于第一阶段收尾（SDD-014）。
 
 ### 待决策问题
@@ -385,7 +385,7 @@ V0.1 基础层完成需要同时满足：
 7. 历史聊天和事件记忆的保留周期、脱敏策略和删除接口如何定义？
 8. OODA/ReAct 的最大循环次数、成功后置条件和人工升级阈值如何配置？
 
-9. （已于 2026-11-09 裁定，见“已决策”：Kubernetes 访问形态。）
+9. （已于 2026-11-09 裁定、2026-11-16 修订，见“已决策”：Kubernetes 访问形态。）
 10. 专用只读账号的 token 到期后如何续期？（切片一手动更换，SDD-016 起由凭据库处理。）
 11. Web 工作台是否把 Agent 执行改为异步（202、后台线程、轮询）？（SDD-015 的前置条件。）
 12. 重复调用达到什么阈值后熔断？（SDD-014 先观测，积累数据后裁定。）
