@@ -23,10 +23,10 @@ MCP_TOOL_NAME_RE = re.compile(
     r"^(?=.{1,64}$)mcp__[a-z][a-z0-9-]*(?:_[a-z0-9-]+)*__[a-zA-Z0-9][a-zA-Z0-9-]*(?:_[a-zA-Z0-9-]+)*$"
 )
 # 每一段（server / tool 名）自身的规则
-# server 段：小写字母开头，仅 a-z0-9-
-_MCP_SERVER_SEGMENT_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-# tool 段：字母数字开头，仅 a-zA-Z0-9-
-_MCP_TOOL_SEGMENT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9-]*$")
+# server 段：小写字母开头，允许 a-z0-9- 与单下划线 _（禁 __ 与末尾 _）
+_MCP_SERVER_SEGMENT_RE = re.compile(r"^[a-z][a-z0-9-]*(?:_[a-z0-9-]+)*$")
+# tool 段：字母数字开头，允许 a-zA-Z0-9- 与单下划线 _（禁 __ 与末尾 _）
+_MCP_TOOL_SEGMENT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9-]*(?:_[a-zA-Z0-9-]+)*$")
 # 内置工具name
 BUILTIN_TOOL_NAME_RE = re.compile(
     r"^(?=.{1,64}$)[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
@@ -153,8 +153,6 @@ class ToolSpec:
             raise ValueError("input_schema type must be object")
         if self.timeout_seconds <= 0:
             raise ValueError(f"timeout_seconds {self.timeout_seconds!r} must be > 0")
-        if self.input_schema is None:
-            raise ValueError("input_schema must be defined")
         object.__setattr__(self, "input_schema", copy.deepcopy(self.input_schema))
 
     def to_input_schema(self):
