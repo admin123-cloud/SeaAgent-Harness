@@ -7,7 +7,7 @@ from typing import Any
 from typing import Literal
 from pydantic import ValidationError
 
-from model.errors import ToolNotFoundError,ToolInputValidationError,validate_arguments_by_schema
+from model.errors import ToolNotFoundError,ToolInputValidationError
 from model.models import ToolCall, ToolResult
 
 
@@ -32,16 +32,58 @@ BUILTIN_TOOL_NAME_RE = re.compile(
     r"^(?=.{1,64}$)[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
 )
 
+_JSON_TYPE_CHECKERS: dict[str, Callable[[Any], bool]] = {
+    "string": lambda v: isinstance(v, str),
+    # 关键坑：在 Python 里 isinstance(True, int) 为 True！必须排除 bool
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+    "boolean": lambda v: isinstance(v, bool),
+    "array": lambda v: isinstance(v, list),
+    "object": lambda v: isinstance(v, dict),
+    "null": lambda v: v is None,
+}
+
+
+def validate_arguments_by_schema(arguments: Any, schema: dict[str, Any]) -> None:
+    # 1) 顶层必须是 dict
+    if not isinstance(arguments, dict):
+        raise ToolInputValidationError("arguments 必须是 JSON object (dict)")
+
+    # 2) 检查 required 必填键是否齐全
+    required = schema.get("required") or []
+    missing = [key for key in required if key not in arguments]
+    if missing:
+        raise ToolInputValidationError(f"缺少必填参数: {', '.join(missing)}")
+
+    # 3) 遍历已传入的每个参数，核对 properties 里声明的 type
+    properties = schema.get("properties") or {}
+    for key, value in arguments.items():
+        prop_schema = properties.get(key)
+        if not isinstance(prop_schema, dict):
+            continue  # 未在 properties 声明的键暂跳过（若需严禁额外键可再查 additionalProperties is False）
+
+        expected = prop_schema.get("type")
+        if expected is None:
+            continue  # 复杂结构如 anyOf / oneOf 暂不在此轻量层硬拦
+
+        # JSON Schema 允许 type 为单个字符串或列表（如 ["string", "null"]）
+        allowed_types = [expected] if isinstance(expected, str) else list(expected)
+        checkers = [_JSON_TYPE_CHECKERS[t] for t in allowed_types if t in _JSON_TYPE_CHECKERS]
+        if checkers and not any(check(value) for check in checkers):
+            raise ToolInputValidationError(f"参数 {key!r} 类型不匹配，期望 {expected!r}")
+
 def validate_tool_name(name: str, source: str) -> None:
     """
     参考claude code 的工具定义规则
-    name   正则 ^[a-zA-Z0-9_-]{1,128}$
+    name   正则 ^[a-zA-Z0-9_-]{1,64}$
     source buildin 或 mcp
     """
     if not isinstance(name, str) or not name:
         raise ValueError(f"tool name must be a non-empty str, got {name!r}")
     if len(name) > 64:
         raise ValueError(f"tool name{name} at most 64 characters")
+    if source not in ("builtin", "mcp"):
+        raise ValueError(f"source {source!r} must be one of 'builtin', 'mcp'")
     if source == "builtin":
         if not BUILTIN_TOOL_NAME_RE.fullmatch(name):
             raise ValueError(
@@ -77,10 +119,6 @@ def validate_tool_name(name: str, source: str) -> None:
         if not MCP_TOOL_NAME_RE.fullmatch(name):
             raise ValueError(f"mcp tool name {name!r} must match {MCP_TOOL_NAME_RE.pattern}")
 
-def check_input_schema(tool_call:ToolCall):
-    if not isinstance(tool_call.arguments, dict):
-        raise ToolInputValidationError()
-
 
 # @dataclass 自动生成构造函数
 @dataclass(frozen=True)
@@ -92,8 +130,6 @@ class ToolSpec:
     description: str
     # 工具参数的json体
     input_schema: dict[str, Any]
-    # 可选参数 参数示例
-    #input_example: dict[str, Any] | None = None
 
     # 真正执行工具的函数
     handler: ToolHandler
@@ -106,19 +142,19 @@ class ToolSpec:
     # 单次执行超时时间
     timeout_seconds: float = 5.0
 
-    """ 检查input_schema 是dict json 且非空"""
     def __post_init__(self):
-        validate_tool_name(self.name, self.source)
         if self.source not in ("builtin", "mcp"):
             raise ValueError(f"source {self.source!r} must be one of 'builtin', 'mcp'")
+        # 检查input_schema 是dict json 且非空
+        validate_tool_name(self.name, self.source)
+        if not isinstance(self.input_schema, dict):
+            raise ValueError(f"input_schema{self.input_schema} must be dict")
+        if self.input_schema.get("type") != "object":
+            raise ValueError("input_schema type must be object")
         if self.timeout_seconds <= 0:
             raise ValueError(f"timeout_seconds {self.timeout_seconds!r} must be > 0")
         if self.input_schema is None:
             raise ValueError("input_schema must be defined")
-        if self.input_schema.get("type") is not "object":
-            raise ValueError("input_schema type must be object")
-        if not isinstance(self.input_schema, dict):
-            raise ValueError(f"input_schema{self.input_schema} must be dict")
         object.__setattr__(self, "input_schema", copy.deepcopy(self.input_schema))
 
     def to_input_schema(self):
@@ -182,8 +218,7 @@ class ToolRegistry:
                 "工具未注册",
                 "tool_not_found_error",
             )
-        except ToolInputValidationError,ValidationError:
-            """ 工具入参校验失败 应该转大模型"""
+        except (ToolInputValidationError,ValidationError):
             return self._failure_result(
                 tool_call,
                 started,
