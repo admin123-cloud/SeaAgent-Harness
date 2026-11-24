@@ -47,7 +47,7 @@ class AgentRuntime:
             {
                 "name":spec.name,
                 "description":spec.description,
-                "input_schema": spec.input_model.model_json_schema(),
+                "input_schema": spec.to_input_schema,
                 "required_permissions": sorted(spec.required_permissions),
                 "risk_level": spec.risk_level
             }

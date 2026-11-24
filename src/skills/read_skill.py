@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 from .registry import SkillRegistry
 from tools import ToolSpec
@@ -9,14 +11,16 @@ class ReadSkillInput(BaseModel):
 # 适配层：只做接线 ← ToolSpec 注册写这里
 def build_read_skill_spec(registry: SkillRegistry) -> ToolSpec:
 
-    async def run_read_skill(arguments: ReadSkillInput) -> dict[str, object]:
+    async def run_read_skill(raw_args: dict[str, Any]) -> dict[str, object]:
+        arguments = ReadSkillInput.model_validate(raw_args)
         return registry.read_for_model(arguments.load_ref)
 
     return ToolSpec(
         name="read_skill",
         description="加载一个 Skill 的完整指引。先从 available_skills 目录选择匹配的 skill，再用它的 load_ref 调用本工具。",
-        input_model=ReadSkillInput,
+        input_schema=ReadSkillInput.model_json_schema(),
         handler=run_read_skill,
+        source="builtin",
         required_permissions=frozenset(),
         risk_level="low",
         timeout_seconds=2.0,
