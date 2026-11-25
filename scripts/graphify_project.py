@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     # update of src still writes to the repository-root .graphify.
     env = os.environ.copy()
     env["GRAPHIFY_OUT"] = str((REPO_ROOT / ".graphify").resolve())
+    # 历史版本由 Git 跟踪维护，关闭按日期生成快照备份目录（如 YYYY-MM-DD/）
+    env.setdefault("GRAPHIFY_NO_BACKUP", "1")
 
     # The project graph covers src; passing the path explicitly keeps updates
     # portable and avoids depending on a machine-specific marker.
