@@ -8,5 +8,6 @@ __pycache__/
 .env
 .mcp-backups/
 *.log
+.graphify/cache/
 .idea/
 .tmp

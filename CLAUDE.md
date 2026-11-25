@@ -56,7 +56,7 @@ src/scripts/                   项目内验证脚本
 src/web_app.py                 本地事件工作台入口
 src/main.py                    命令行演示入口
 .sre-agent-data/               运行期数据（SQLite、团队 Skill 库），不入库
-.graphify/                     项目架构关系图、报告和 Graphify 缓存
+.graphify/                     项目架构关系图、报告与元数据（`cache/` 仅本地保留、不入库）
 scripts/graphify_project.py    使用根目录 .graphify 的 Graphify 包装入口
 docs/PRD.md                   产品需求规格
 docs/task/implementation.md  任务拆解和状态跟踪
