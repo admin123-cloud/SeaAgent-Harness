@@ -4,7 +4,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-ROOT = Path(r"D:\AI\Develop\SreAgent")
+ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / ".sre-agent-data/bin/kubernetes-mcp-server-windows-amd64.exe"
 TOML = ROOT / ".sre-agent-data/secrets/k8s-mcp.toml"
 KUBECONFIG = ROOT / ".sre-agent-data/secrets/kubeconfig.yaml"
@@ -50,16 +50,23 @@ async def main():
                     "input_schema":tool.input_schema or {}
                 }
                 canonical = json.dumps(payload,sort_keys=True,ensure_ascii=False,separators=(',',':'))
-                digest = hashlib.sha256(canonical.encode()).hexdigest[:16]
-                print(digest)
+                digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+                print(f"{tool.name}: {digest}")
             #1 list_tools 返回恰好
             names = set(tool_names)
 
-            print("=== 1. 工具白名单 ===")
-            print(names)
+            extra = sorted(names - EXPECTED)  # 白名单以外多出来的工具（如 pods_exec / configuration_view）
+            missing = sorted(EXPECTED - names)  # 必备 4 工具里缺了哪几个
+            print("=== 1. 工具白名单校验 ===")
+            print("实际发现工具:", sorted(names))
+            if extra:
+                print("警告：存在白名单外工具（后续准入层将拦截）:", extra)
+            if missing:
+                raise RuntimeError(f"缺少必需的只读工具: {missing}")
 
             if "pods_list_in_namespace" not in names:
                 raise RuntimeError("缺少 Pod 列表工具")
+
 
 
             print("\n=== 2. sre-drill Pod 读取 ===")
