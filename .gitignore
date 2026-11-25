@@ -11,4 +11,5 @@ __pycache__/
 .graphify/cache/
 .idea/
 .tmp
-.sre-agent-data/secrets/token.txt
+.sre-agent-data/
+
