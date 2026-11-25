@@ -1,13 +1,12 @@
 node_modules/
-dist/
 .venv/
+venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
 .env
 .mcp-backups/
-.sre-agent-data/
 *.log
-.graphify/*
 .idea/
+.tmp

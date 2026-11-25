@@ -13,6 +13,7 @@ dependencies = [
   "pydantic-settings>=2.8,<3",
   "python-dotenv>=1,<2",
   "openai>=1,<3",
+  "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]
@@ -27,10 +28,12 @@ sre-agent-web = "web_app:main"
 [tool.hatch.build.targets.wheel]
 only-include = [
   "src/agent",
+  "src/bootstrap.py",
   "src/config",
   "src/database",
   "src/model",
   "src/scripts",
+  "src/skills",
   "src/tools",
   "src/main.py",
   "src/web_app.py",

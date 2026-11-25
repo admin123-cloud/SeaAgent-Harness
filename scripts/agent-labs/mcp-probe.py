@@ -22,15 +22,18 @@ async def main():
         if not path.is_file():
             raise FileNotFoundError(path)
 
-    env = os.environ.copy()
-    print(env)
-    env["KUBECONFIG"] = str(KUBECONFIG)
-
+    allowed_keys = ["PATH", "SYSTEMROOT", "WINDIR"]
+    safe_env = {
+        k: os.environ[k]
+        for k in allowed_keys
+        if k in os.environ
+    }
+    safe_env["KUBECONFIG"] = str(KUBECONFIG)
 
     params = StdioServerParameters(
         command=str(EXE),
         args=["--config", str(TOML)],
-        env=env,
+        env=safe_env,
     )
 
     async with stdio_client(params) as (r, w):
