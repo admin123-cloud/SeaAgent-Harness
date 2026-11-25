@@ -44,6 +44,14 @@ async def main():
             tool_names = []
             for tool in tools:
                 tool_names.append(tool.name)
+                payload = {
+                    "name": tool.name,
+                    "description":tool.description or "",
+                    "input_schema":tool.input_schema or {}
+                }
+                canonical = json.dumps(payload,sort_keys=True,ensure_ascii=False,separators=(',',':'))
+                digest = hashlib.sha256(canonical.encode()).hexdigest[:16]
+                print(digest)
             #1 list_tools 返回恰好
             names = set(tool_names)
 
