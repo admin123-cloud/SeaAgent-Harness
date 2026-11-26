@@ -4,3 +4,9 @@ class ToolNotFoundError(Exception):
 
 class ToolInputValidationError(Exception):
     """ 工具输入校验失败 """
+
+class MCPConnectionError(Exception):
+    """ MCP服务连接失败 """
+
+class MCPInvocationError(Exception):
+    """ MCP服务调用失败 """

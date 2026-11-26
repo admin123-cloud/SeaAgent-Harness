@@ -26,6 +26,11 @@ from .k8s_errors import (
     _is_cert_error
 )
 
-from .tool_errors import ToolNotFoundError,ToolInputValidationError
+from .tool_errors import (
+    ToolNotFoundError,
+    ToolInputValidationError,
+    MCPConnectionError,
+    MCPInvocationError
+)
 
 from .agent_errors import AgentRuntimeError

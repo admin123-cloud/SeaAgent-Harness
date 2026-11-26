@@ -172,6 +172,7 @@ class ToolRegistry:
     def __init__(self):
         self._specs : dict[str, ToolSpec] = {}
 
+
     def register(self,spec:ToolSpec) -> None:
         validate_tool_name(spec.name, spec.source)
         if spec.name in self._specs:
@@ -183,7 +184,7 @@ class ToolRegistry:
             return self._specs[name]
         raise ToolNotFoundError(f"Tool {name} not registered yet")
 
-    def list_specs(self) -> list[ToolSpec]:
+    def list_tool_specs(self) -> list[ToolSpec]:
         return list(self._specs.values())
 
 

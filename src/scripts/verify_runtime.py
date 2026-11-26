@@ -79,7 +79,7 @@ async def check_wiring(deps):
     """ A层 检查skill和tool 读取和使用是否正常 """
     # A1.断言read_skill 已注册
     tool_name = []
-    for tool_spec in deps.tool_registry.list_specs():
+    for tool_spec in deps.tool_registry.list_tool_specs():
         tool_name.append(tool_spec.name)
 
     expect("read_skill" in tool_name, "检查tool工具异常，未发现内置工具read_skill")

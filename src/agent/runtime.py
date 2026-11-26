@@ -43,16 +43,16 @@ class AgentRuntime:
             self.event_sink(event_type, data)
 
     def _available_tools(self) -> list[dict[str,object]]:
-        return [
-            {
+        tool_list: list[dict[str, object]] = []
+        for spec in self.registry.list_tool_specs():
+            tool_list.append({
                 "name":spec.name,
                 "description":spec.description,
                 "input_schema": spec.to_input_schema(),
                 "required_permissions": sorted(spec.required_permissions),
                 "risk_level": spec.risk_level
-            }
-            for spec in self.registry.list_specs()
-        ]
+            })
+        return tool_list
 
     # 注入  available_tools / available_skills / agent_history=[]
     def _prepare_request(self, request:DecisionRequest) -> DecisionRequest:
