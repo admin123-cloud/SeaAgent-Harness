@@ -45,7 +45,7 @@ class MCPStdioAdapter:
 
         return StdioServerParameters(
             command=str(self._config.command),
-            args=["--config", str(self._config.args)],
+            args=[*self._config.args],
             env=safe_env,
         )
 
