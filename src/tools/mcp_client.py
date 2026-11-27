@@ -1,6 +1,6 @@
-afrom contextlib import AsyncExitStack
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
-import os, json,hashlib
+import os
 from typing import Any
 from pathlib import Path
 
@@ -58,12 +58,11 @@ class MCPStdioAdapter:
                 session = await self._stack.enter_async_context(ClientSession(r, w))
                 await session.initialize()
                 self._session = session
-            except MCPConnectionError as ex:
+            except MCPConnectionError:
+                raise
+            except Exception as exc:
                 await self.close()
-                raise MCPConnectionError(f"MCP网络连接失败") from ex
-            except MCPInvocationError as ex:
-                await self.close()
-                raise MCPInvocationError(f"MCP调用失败") from ex
+                raise MCPConnectionError("MCP 服务连接或初始化失败") from exc
 
     async def list_tool_specs(self) -> list[ToolSpec]:
         if self._session is None:
@@ -79,7 +78,7 @@ class MCPStdioAdapter:
                     name= f"mcp__{self._config.server_name}__{tool.name}",
                     description=tool.description or "",
                     # 确保 schema.setdefault("type", "object")
-                    input_schema= dict(tool.input_schema or {"type": "object", "properties": {}}),
+                    input_schema= schema,
                     source="mcp",
                     handler= self._make_tool_handel(tool.name)
                 )
@@ -113,13 +112,9 @@ class MCPStdioAdapter:
 
         return _invoke
 
-    async def handler(self,name:str,arguments:dict) -> dict[str, object] :
-        result = await self._session.call_tool(name = name,arguments=arguments)
-        if result.is_error:
-            raise MCPInvocationError()
-        return _call_result_to_dict(result)
-
-
     async def close(self) -> None:
-        await self._stack.aclose()
-        self._session = None
+        try:
+            await self._stack.aclose()
+        finally:
+            self._session = None
+            self._stack = AsyncExitStack()
